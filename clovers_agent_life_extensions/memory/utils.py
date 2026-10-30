@@ -1,28 +1,17 @@
 import math
-import time
-import json
 import contextlib
-import shutil
 import frontmatter
 import torch
 
 from pathlib import Path
-from collections import Counter, defaultdict
+from collections import Counter
 from torch import Tensor
 from rapidfuzz import fuzz
-from sentence_transformers import SentenceTransformer, util
-from clovers_agent import CloversAgent, Turn, Event
-from clovers_agent.session import Session
-from clovers_agent.config import CONFIG as AGENT_CONFIG
-from clovers_agent.constants import ON_CHAT
-from clovers_agent.embedding import batch_similarity
+from sentence_transformers import SentenceTransformer
 
-import pydantic
-from pydantic import PrivateAttr
-
-from typing import TYPE_CHECKING, TypedDict
+from typing import TypedDict
 from collections.abc import Iterable
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 
 class HistoryEntry(BaseModel):
@@ -214,7 +203,7 @@ class HistoryIndex(BaseModel):
         tokens = set[str]()
         for seg in sentence.split():
             tokens.update(self.extract_keywords(seg))
-        if tokens:
+        if not tokens:
             return
         avgdl = sum(h.keyword_count for h in entries) / n
         if avgdl == 0:
@@ -242,11 +231,8 @@ class HistoryIndex(BaseModel):
         if not entries:
             return
         # Normalize BM25
-        bm25_scores = self.bm25(sentence)
-        if bm25_scores:
-            max_bm25 = max(bm25_scores, default=0.0)
-            if max_bm25 > 0:
-                bm25_scores = [score / max_bm25 for score in bm25_scores]
+        if (bm25_scores := self.bm25(sentence)) and (max_bm25 := max(bm25_scores)) > 0:
+            bm25_scores = [score / max_bm25 for score in bm25_scores]
         else:
             bm25_scores = [0.0] * len(entries)
         # Semantic similarity
