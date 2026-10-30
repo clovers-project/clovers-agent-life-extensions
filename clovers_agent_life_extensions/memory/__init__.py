@@ -1,3 +1,3 @@
-from .main import collect_memory
+from .main import retrieve_memories
 
-__all__ = ["collect_memory"]
+__all__ = ["retrieve_memories"]

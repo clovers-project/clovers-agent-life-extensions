@@ -73,7 +73,7 @@ def find_fuzzy_match(text: str, candidates: list[str], start: int, text_length: 
 
 
 class HistoryIndex(BaseModel):
-    similarity_threshold: int
+    similarity_threshold: float
     entries: list[IndexedHistory]
     keyword_aliases: dict[str, str]
     canonical_keywords: set[str]
@@ -102,7 +102,7 @@ class HistoryIndex(BaseModel):
     def normalize_keywords(self, keywords: Iterable[str]) -> set[str]:
         return {self.keyword_aliases[keyword] for keyword in keywords}
 
-    def __init__(self, similarity_threshold: int, entries: list[HistoryEntry], sentence_model: SentenceTransformer):
+    def __init__(self, similarity_threshold: float, entries: list[HistoryEntry], sentence_model: SentenceTransformer):
         self.bm25_k1: float = 1.2
         self.bm25_b: float = 0.75
         self.keyword_weight: float = 0.5

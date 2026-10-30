@@ -2,13 +2,13 @@ from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.constants import ON_CHAT
 from .base import TOOLS
 from .user_profile import intro_user_profile
-from .memory import collect_memory
+from .memory import retrieve_memories
 
 
 @TOOLS.on_intro(ON_CHAT)
 async def _(agent: CloversAgent, turn: Turn, event: Event):
     unit = [
-        collect_memory(agent, turn),
+        retrieve_memories(agent, turn),
         intro_user_profile(turn, event),
     ]
     return "\n".join(unit)
