@@ -14,16 +14,16 @@ KEYWORD_FUZZ_THRESHOLD = memory.keyword_fuzz_threshold
 
 
 def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
-    archive_dir = session.session_dir / "collected_histories"
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    unrecognized_dir = session.session_dir / "unrecognized_histories"
+    processed_dir = session.session_dir / "histories_processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    unrecognized_dir = session.session_dir / "histories_unrecognized"
     unrecognized_dir.mkdir(parents=True, exist_ok=True)
     extra = session.extra
     if KEY_HISTORY_INDEX in extra:
         index = cast(HistoryIndex, extra[KEY_HISTORY_INDEX])
     else:
         entries = []
-        for path in tuple(archive_dir.iterdir()):
+        for path in tuple(processed_dir.iterdir()):
             history = HistoryEntry.from_file(path)
             if history is None:
                 shutil.move(path, unrecognized_dir)
@@ -41,7 +41,7 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
         max_t = max(history.timestamp for history, _ in hp_lst)
         for history, path in hp_lst:
             if history.timestamp < max_t:
-                shutil.move(path, archive_dir)
+                shutil.move(path, processed_dir)
                 index.update(history)
     return index
 
