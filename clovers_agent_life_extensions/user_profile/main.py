@@ -160,4 +160,10 @@ async def _(
     user_profile.memories.clear()
     user_profile.memories.extend({"id": i, "content": c, "star": star} for i, (c, star) in enumerate(memories, 1))
     profile_path.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
+    extra = turn.extra
+    if UPDATE_USER_PROFILE in extra:
+        counter = extra[UPDATE_USER_PROFILE]
+        user_id = event.user_id
+        if user_id in counter:
+            del counter[user_id]
     return "OK"
