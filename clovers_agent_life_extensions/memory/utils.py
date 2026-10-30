@@ -4,7 +4,7 @@ import frontmatter
 import torch
 
 from pathlib import Path
-from collections import Counter
+from collections import Counter, defaultdict
 from torch import Tensor
 from rapidfuzz import fuzz
 from sentence_transformers import SentenceTransformer
@@ -80,15 +80,7 @@ def find_fuzzy_match(text: str, candidates: list[str], start: int, text_length: 
                 return keyword, start + match_len
 
 
-class HistoryIndex(BaseModel):
-    similarity_threshold: float
-    entries: list[IndexedHistory]
-    keyword_aliases: dict[str, str]
-    canonical_keywords: set[str]
-    document_frequency: Counter[str]
-    known_keywords: set[str]
-    sorted_keywords: list[str]
-    keywords_by_first_char: dict[str, list[str]]
+class HistoryIndex:
 
     def register_keyword(self, keyword: str):
         similarity_threshold = self.similarity_threshold
@@ -118,16 +110,14 @@ class HistoryIndex(BaseModel):
         self.recency_half_life: float = 30
         self.sentence_model_batch_size: int = 256
         self.sentence_model: SentenceTransformer = sentence_model
-        super().__init__(
-            similarity_threshold=similarity_threshold,
-            entries=[],
-            keyword_aliases={},
-            canonical_keywords={},
-            document_frequency=Counter(),
-            known_keywords=set(),
-            sorted_keywords=[],
-            keywords_by_first_char={},
-        )
+        self.similarity_threshold = similarity_threshold
+        self.entries: list[IndexedHistory] = []
+        self.keyword_aliases: dict[str, str] = {}
+        self.canonical_keywords: set[str] = set()
+        self.document_frequency: Counter[str] = Counter()
+        self.known_keywords: set[str] = set()
+        self.sorted_keywords: list[str]
+        self.keywords_by_first_char: defaultdict[str, list[str]] = defaultdict(list)
         known_keywords = self.known_keywords
         for entry in entries:
             known_keywords.update(entry.keywords)
@@ -164,8 +154,9 @@ class HistoryIndex(BaseModel):
             normalize_embeddings=True,
             show_progress_bar=False,
         )
-        self.entries.append(indexed_entry)
-        self.entries.sort(key=lambda entry: entry.timestamp, reverse=True)
+        entries = self.entries
+        entries.append(indexed_entry)
+        entries.sort(key=lambda entry: entry.timestamp, reverse=True)
         known_keywords = self.known_keywords
         diff = keywords.difference(known_keywords)
         known_keywords.update(diff)
