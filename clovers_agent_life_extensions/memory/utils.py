@@ -36,7 +36,15 @@ class HistoryEntry(BaseModel):
 class IndexedHistory(HistoryEntry):
     normalized_keywords: set[str]
     keyword_count: int
-    overview_embedding: Tensor = PrivateAttr()
+    _overview_embedding: Tensor = PrivateAttr()
+
+    @property
+    def overview_embedding(self) -> Tensor:
+        return self._overview_embedding
+
+    @overview_embedding.setter
+    def overview_embedding(self, value: Tensor):
+        self._overview_embedding = value
 
     @classmethod
     def from_entry(cls, entry: HistoryEntry, normalized_keywords: set[str]):
