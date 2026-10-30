@@ -3,8 +3,9 @@ import time
 import json
 import contextlib
 import shutil
-import pydantic
 import frontmatter
+import torch
+
 from pathlib import Path
 from collections import Counter, defaultdict
 from torch import Tensor
@@ -15,6 +16,9 @@ from clovers_agent.session import Session
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
 from clovers_agent.embedding import batch_similarity
+
+import pydantic
+from pydantic import PrivateAttr
 
 from typing import TYPE_CHECKING, TypedDict
 from collections.abc import Iterable
@@ -43,6 +47,7 @@ class HistoryEntry(BaseModel):
 class IndexedHistory(HistoryEntry):
     normalized_keywords: set[str]
     keyword_count: int
+    overview_embedding: Tensor = PrivateAttr()
 
     @classmethod
     def from_entry(cls, entry: HistoryEntry, normalized_keywords: set[str]):
@@ -108,11 +113,14 @@ class HistoryIndex(BaseModel):
     def normalize_keywords(self, keywords: Iterable[str]) -> set[str]:
         return {self.keyword_aliases[keyword] for keyword in keywords}
 
-    def __init__(self, similarity_threshold: int, entries: list[HistoryEntry]):
-        self.k1: float = 1.2
-        self.b: float = 0.75
-        self.alpha: float = 0.5
-        self.decay_half_life: float = 30
+    def __init__(self, similarity_threshold: int, entries: list[HistoryEntry], sentence_model: SentenceTransformer):
+        self.bm25_k1: float = 1.2
+        self.bm25_b: float = 0.75
+        self.keyword_weight: float = 0.5
+        self.semantic_weight: float = 0.5
+        self.recency_half_life: float = 30
+        self.sentence_model_batch_size: int = 256
+        self.sentence_model: SentenceTransformer = sentence_model
         super().__init__(
             similarity_threshold=similarity_threshold,
             entries=[],
@@ -136,6 +144,15 @@ class HistoryIndex(BaseModel):
         self.sorted_keywords = sorted(known_keywords, key=len, reverse=True)
         for kw in self.sorted_keywords:
             self.keywords_by_first_char[kw[0]].append(kw)
+        overview_embeddings = self.sentence_model.encode(
+            [entry.overview for entry in entries],
+            batch_size=self.sentence_model_batch_size,
+            convert_to_tensor=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        for i, entry in enumerate(self.entries):
+            entry.overview_embedding = overview_embeddings[i]
 
     def update(self, entry: HistoryEntry):
         keywords = entry.keywords
@@ -143,7 +160,14 @@ class HistoryIndex(BaseModel):
             self.register_keyword(keyword)
         normalize_keywords = self.normalize_keywords(keywords)
         self.document_frequency.update(normalize_keywords)
-        self.entries.append(IndexedHistory.from_entry(entry, normalize_keywords))
+        indexed_entry = IndexedHistory.from_entry(entry, normalize_keywords)
+        indexed_entry.overview_embedding = self.sentence_model.encode(
+            entry.overview,
+            convert_to_tensor=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        self.entries.append(indexed_entry)
         self.entries.sort(key=lambda entry: entry.timestamp, reverse=True)
         known_keywords = self.known_keywords
         diff = keywords.difference(known_keywords)
@@ -184,44 +208,63 @@ class HistoryIndex(BaseModel):
             i += 1
         return tokens
 
-    def search(
-        self,
-        sentence: str,
-        sentence_model: SentenceTransformer,
-    ):
-        if not self.entries:
-            return
+    def bm25(self, sentence: str):
+        entries = self.entries
+        n = len(entries)
         tokens = set[str]()
         for seg in sentence.split():
             tokens.update(self.extract_keywords(seg))
-        if not tokens:
+        if tokens:
             return
-        n = len(self.entries)
-        lam = math.log(n) / n
-        avgdl = sum(h.keyword_count for h in self.entries) / n
+        avgdl = sum(h.keyword_count for h in entries) / n
+        if avgdl == 0:
+            return
         # BM25 IDF
         idf = {token: math.log(1 + (n - c + 0.5) / (c + 0.5)) for token in tokens if (c := self.document_frequency[token]) > 0}
         if not idf:
             return
-        # BM25 排序
-        scored: list[tuple[float, IndexedHistory]] = []
-        k1, b = self.k1, self.b
-        emb_simi = batch_similarity(
-            [x.overview for x in self.entries],
-            sentence,
-            sentence_model,
-        )
-        for i, entry in enumerate(self.entries):
+        # BM25
+        k1, b = self.bm25_k1, self.bm25_b
+        bm25_scores = list[float]()
+        for entry in entries:
             dl = entry.keyword_count
             bm25 = 0.0
             for token, weight in idf.items():
                 if token not in entry.normalized_keywords:
                     continue
-                tf = 1
-                denominator = tf + k1 * (1 - b + b * dl / avgdl)
-                bm25 += weight * (tf * (k1 + 1) / denominator)
-            # (n - i) / n 为归一化线性遗忘系数
-            score = (bm25 + emb_simi[i]) * math.exp(-lam * i)
-            scored.append((score, entry))
+                denominator = 1 + k1 * (1 - b + b * dl / avgdl)
+                bm25 += weight * (k1 + 1) / denominator
+            bm25_scores.append(bm25)
+        return bm25_scores
+
+    def search(self, sentence: str):
+        entries = self.entries
+        if not entries:
+            return
+        # Normalize BM25
+        bm25_scores = self.bm25(sentence)
+        if bm25_scores:
+            max_bm25 = max(bm25_scores, default=0.0)
+            if max_bm25 > 0:
+                bm25_scores = [score / max_bm25 for score in bm25_scores]
+        else:
+            bm25_scores = [0.0] * len(entries)
+        # Semantic similarity
+        query_embedding = self.sentence_model.encode(
+            sentence,
+            convert_to_tensor=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        semantic_scores = torch.stack([entry.overview_embedding for entry in entries]) @ query_embedding
+        # Combine relevance and ordinal decay
+        scored: list[tuple[float, IndexedHistory]] = []
+        keyword_weight = self.keyword_weight
+        semantic_weight = self.semantic_weight
+        recency_half_life = self.recency_half_life
+        for i, (entry, bm25, semantic) in enumerate(zip(entries, bm25_scores, semantic_scores.cpu().tolist())):
+            relevance = keyword_weight * bm25 + semantic_weight * semantic
+            recency = 2 ** (-i / recency_half_life) if recency_half_life > 0 else 1.0
+            scored.append((relevance * recency, entry))
         scored.sort(key=lambda item: item[0], reverse=True)
         return scored
