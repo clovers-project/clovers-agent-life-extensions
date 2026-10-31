@@ -31,7 +31,7 @@ class UserProfile(BaseModel):
 - 偏好: {self.preferences}
 - 印象: {self.impression}
 
-# 记忆碎片
+# 用户记忆
 
 {memories}
 """

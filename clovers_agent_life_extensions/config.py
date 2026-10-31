@@ -15,8 +15,11 @@ class UserProfileConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     keyword_fuzz_threshold: float = 85
+    """关键词模糊匹配阈值"""
+    recall_limit: int = 30
+    """记忆召回数量限制"""
 
 
 class Config(BaseConfig):
     user_profile: UserProfileConfig = UserProfileConfig()
-    memory: MemoryConfig = MemoryConfig()
+    histories: MemoryConfig = MemoryConfig()

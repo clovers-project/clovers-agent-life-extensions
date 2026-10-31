@@ -12,8 +12,9 @@ from .constant import KEY_HISTORY_INDEX, KEY_HISTORY_ENTRIES
 
 from typing import cast
 
-memory = CONFIG.memory
-KEYWORD_FUZZ_THRESHOLD = memory.keyword_fuzz_threshold
+histories_config = CONFIG.histories
+KEYWORD_FUZZ_THRESHOLD = histories_config.keyword_fuzz_threshold
+RECALL_LIMIT = histories_config.recall_limit
 
 
 def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
@@ -33,6 +34,7 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
                 continue
             entries.append(history)
         index = HistoryIndex(KEYWORD_FUZZ_THRESHOLD, entries, agent.sentence_model)
+        extra[KEY_HISTORY_INDEX] = index
     hp_lst = list[tuple[HistoryEntry, Path]]()
     for path in tuple(session.history_dir.iterdir()):
         history = HistoryEntry.from_file(path)
@@ -65,40 +67,40 @@ def format_entry(i: int, entry: HistoryEntry):
     return f"{i}. {dt} {entry.overview}"
 
 
-async def intro_retrieve_memories(agent: CloversAgent, session: Session, limit: int = 20):
+async def intro_retrieve_history(agent: CloversAgent, session: Session):
     history_index = prepare_history_index(agent, session)
     message = "\n".join(format_message(t, c) for t, c, _ in session.message_history)
     lst = await asyncio.to_thread(history_index.search, message)
     if not lst:
         return ""
-    top = heapq.nlargest(limit, lst, key=lambda x: x[0])
+    top = heapq.nlargest(RECALL_LIMIT, lst, key=lambda x: x[0])
     entries = session.extra[KEY_HISTORY_ENTRIES] = cast(list[IndexedHistory], [])
     avg_score = sum(score for score, _ in top) / len(top)
     for score, meta in top:
         if score < avg_score:
             break
         entries.append(meta)
-    memories = ["# 相关历史记忆\n"]
+    memories = ["# 相关历史记录\n"]
     memories.extend(format_entry(*x) for x in enumerate(entries, start=1))
     return "\n".join(memories)
 
 
 @TOOLS.register(
-    "expand_memory",
-    "展开某条相关历史记忆的完整内容",
-    {"memory_id": {"type": "integer", "description": "相关历史记忆条目序号"}},
+    "expand_history",
+    "展开某条相关历史记录的完整内容",
+    {"index": {"type": "integer", "description": "相关历史记录条目序号"}},
     category=ON_CHAT,
 )
 async def _(
     agent: CloversAgent,
     turn: Turn,
     event: Event,
-    memory_id: int,
+    index: int,
 ):
-    if not isinstance(memory_id, int) or memory_id <= 0:
-        return f"Invalid memory_id: {memory_id}"
+    if not isinstance(index, int) or index <= 0:
+        return f"Invalid index: {index}"
     try:
-        entry = cast(IndexedHistory, turn.extra[KEY_HISTORY_ENTRIES][memory_id - 1])
+        entry = cast(IndexedHistory, turn.extra[KEY_HISTORY_ENTRIES][index - 1])
     except (KeyError, IndexError):
-        return "Related memory not found."
+        return "Related history not found."
     return entry.content
