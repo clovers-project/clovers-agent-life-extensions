@@ -18,6 +18,8 @@ RECALL_LIMIT = histories_config.recall_limit
 
 
 def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
+    history_dir = session.history_dir
+    history_dir.mkdir(parents=True, exist_ok=True)
     processed_dir = session.session_dir / "histories_processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     unrecognized_dir = session.session_dir / "histories_unrecognized"
@@ -36,7 +38,7 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
         index = HistoryIndex(KEYWORD_FUZZ_THRESHOLD, entries, agent.sentence_model)
         extra[KEY_HISTORY_INDEX] = index
     hp_lst = list[tuple[HistoryEntry, Path]]()
-    for path in tuple(session.history_dir.iterdir()):
+    for path in tuple(history_dir.iterdir()):
         history = HistoryEntry.from_file(path)
         if history is None:
             shutil.move(path, unrecognized_dir)
