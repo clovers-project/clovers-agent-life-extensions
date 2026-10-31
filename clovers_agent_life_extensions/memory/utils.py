@@ -18,7 +18,7 @@ class HistoryEntry(BaseModel):
     overview: str
     keywords: set[str]
     timestamp: float
-    content: str
+    path: Path
 
     @classmethod
     def from_file(cls, path: Path):
@@ -27,10 +27,16 @@ class HistoryEntry(BaseModel):
                 return
             with path.open("r", encoding="utf-8") as f:
                 post = frontmatter.load(f)
-            entry = cls.model_validate({**post.metadata, "content": post.content})
+            entry = cls.model_validate({**post.metadata, "path": path})
             entry.overview = entry.overview.strip()
             entry.keywords = {k.lower() for keyword in entry.keywords if (k := keyword.strip())}
             return entry
+
+    @property
+    def content(self) -> str:
+        with self.path.open("r", encoding="utf-8") as f:
+            post = frontmatter.load(f)
+            return post.content
 
 
 class IndexedHistory(HistoryEntry):

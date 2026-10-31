@@ -1,8 +1,10 @@
 import time
 import json
+import contextlib
 import pydantic
 from pathlib import Path
 from clovers_agent import CloversAgent, Turn, Event
+from clovers_agent.session import Session
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
 from .constants import UPDATE_USER_PROFILE, UPDATE_USER_PROFILE_PROMPT, EDIT_USER_PROFILE
@@ -19,8 +21,8 @@ PROFILE_MEMORY_SIZE = user_profile.profile_memory_size
 USER_PROFILE = Path(AGENT_CONFIG.path) / "UserProfile"
 
 
-def intro_user_profile(turn: Turn, event: Event):
-    extra = turn.extra
+def intro_user_profile(session: Session, event: Event) -> str:
+    extra = session.extra
     if UPDATE_USER_PROFILE not in extra:
         extra[UPDATE_USER_PROFILE] = {}
     counter = extra[UPDATE_USER_PROFILE]
@@ -37,7 +39,7 @@ def intro_user_profile(turn: Turn, event: Event):
         profile_path.unlink()
         return f"# 用户档案：{event.nickname}\n\n目前尚无该用户档案，请在**上下文足够充分**时进行使用 '{UPDATE_USER_PROFILE}' 工具进行第一次更新。"
     if user_profile.block_until > time.time():
-        turn.complete_session()
+        session.complete_session()
     notes.append(user_profile.to_markdown())
     if count > STRONG_REMINDER_TURNS:
         notes.append(f"档案在 {count} 轮对话前更新。请及时使用 '{UPDATE_USER_PROFILE}' 工具对档案进行更新。")
@@ -160,10 +162,6 @@ async def _(
     user_profile.memories.clear()
     user_profile.memories.extend({"id": i, "content": c, "star": star} for i, (c, star) in enumerate(memories, 1))
     profile_path.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
-    extra = turn.extra
-    if UPDATE_USER_PROFILE in extra:
-        counter = extra[UPDATE_USER_PROFILE]
-        user_id = event.user_id
-        if user_id in counter:
-            del counter[user_id]
+    with contextlib.suppress(KeyError):
+        del turn.extra[UPDATE_USER_PROFILE][user_id]
     return "OK"

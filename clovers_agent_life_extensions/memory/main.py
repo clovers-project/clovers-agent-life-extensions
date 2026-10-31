@@ -1,11 +1,14 @@
+import heapq
 import shutil
+import asyncio
 from pathlib import Path
+from datetime import datetime
 from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.session import InputTag, Session
 from clovers_agent.constants import ON_CHAT
 from ..base import TOOLS, CONFIG
-from .utils import HistoryEntry, HistoryIndex
-from .constant import KEY_HISTORY_INDEX
+from .utils import HistoryEntry, IndexedHistory, HistoryIndex
+from .constant import KEY_HISTORY_INDEX, KEY_HISTORY_ENTRIES
 
 from typing import cast
 
@@ -41,7 +44,8 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
         max_t = max(history.timestamp for history, _ in hp_lst)
         for history, path in hp_lst:
             if history.timestamp < max_t:
-                shutil.move(path, processed_dir)
+                new_file = shutil.move(path, processed_dir)
+                history.path = Path(new_file)
                 index.update(history)
     return index
 
@@ -56,33 +60,45 @@ def format_message(tag: InputTag | str, content: str):
             return ""
 
 
-def retrieve_memories(agent: CloversAgent, turn: Turn):
-    session = agent.current_session(turn.session_id)
+def format_entry(i: int, entry: HistoryEntry):
+    dt = datetime.fromtimestamp(entry.timestamp).strftime("%m-%d %H:%M")
+    return f"{i}. {dt} {entry.overview}"
+
+
+async def intro_retrieve_memories(agent: CloversAgent, session: Session, limit: int = 20):
     history_index = prepare_history_index(agent, session)
     message = "\n".join(format_message(t, c) for t, c, _ in session.message_history)
-    lst = history_index.search(message)
+    lst = await asyncio.to_thread(history_index.search, message)
     if not lst:
         return ""
-    lst.sort(key=lambda x: x[0], reverse=True)
-    for score, meta in lst[:5]:
-        print(score, meta.overview)
-    return ""
+    top = heapq.nlargest(limit, lst, key=lambda x: x[0])
+    entries = session.extra[KEY_HISTORY_ENTRIES] = cast(list[IndexedHistory], [])
+    avg_score = sum(score for score, _ in top) / len(top)
+    for score, meta in top:
+        if score < avg_score:
+            break
+        entries.append(meta)
+    memories = ["# 相关历史记忆\n"]
+    memories.extend(format_entry(*x) for x in enumerate(entries, start=1))
+    return "\n".join(memories)
 
 
-# @TOOLS.register(
-#     "block_user",
-#     "拉黑当前用户",
-#     {"block_days": {"type": "number", "description": "拉黑天数，默认 7 天"}},
-#     category=ON_CHAT,
-# )
-# async def _(agent: CloversAgent, turn: Turn, event: Event, block_days: int = 7):
-#     user_id = event.user_id
-#     user_profile_json = USER_PROFILE / f"{user_id}.json"
-#     block_t = min(max(block_days, 1), 30) * 86400 + time.time()
-#     if user_profile_json.exists():
-#         user_profile = UserProfile.model_validate_json(user_profile_json.read_text(encoding="utf-8"))
-#         user_profile.block_until = block_t
-#     else:
-#         user_profile = UserProfile(nickname=event.nickname, block_until=block_t)
-#     user_profile_json.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
-#     return f"OK"
+@TOOLS.register(
+    "expand_memory",
+    "展开某条相关历史记忆的完整内容",
+    {"memory_id": {"type": "integer", "description": "相关历史记忆条目序号"}},
+    category=ON_CHAT,
+)
+async def _(
+    agent: CloversAgent,
+    turn: Turn,
+    event: Event,
+    memory_id: int,
+):
+    if not isinstance(memory_id, int) or memory_id <= 0:
+        return f"Invalid memory_id: {memory_id}"
+    try:
+        entry = cast(IndexedHistory, turn.extra[KEY_HISTORY_ENTRIES][memory_id - 1])
+    except (KeyError, IndexError):
+        return "Related memory not found."
+    return entry.content
