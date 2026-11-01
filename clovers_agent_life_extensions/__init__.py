@@ -12,8 +12,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
         await intro_retrieve_history(agent, session),
         intro_user_profile(session, event),
     ]
-    print(unit)
-    return "\n---\n".join(unit)
+    return "\n---\n".join(filter(None, unit))
 
 
 __version__ = "0.3.0"

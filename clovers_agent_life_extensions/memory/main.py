@@ -89,8 +89,8 @@ async def intro_retrieve_history(agent: CloversAgent, session: Session):
 
 @TOOLS.register(
     "expand_history",
-    "展开某条相关历史记录的完整内容",
-    {"index": {"type": "integer", "description": "相关历史记录条目序号"}},
+    "Retrieve the full content of a relevant history entry when its summary lacks sufficient detail to answer the current request.",
+    {"index": {"type": "integer", "description": "The index of the relevant history entry."}},
     category=ON_CHAT,
 )
 async def _(
