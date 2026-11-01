@@ -18,6 +18,8 @@ class MemoryConfig(BaseModel):
     """关键词模糊匹配阈值"""
     recall_limit: int = 30
     """记忆召回数量限制"""
+    max_memory_size: int = 120
+    """最大记忆条数"""
 
 
 class Config(BaseConfig):

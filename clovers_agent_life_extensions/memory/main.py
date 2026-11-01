@@ -1,3 +1,4 @@
+import contextlib
 import heapq
 import shutil
 import asyncio
@@ -15,6 +16,7 @@ from typing import cast
 histories_config = CONFIG.histories
 KEYWORD_FUZZ_THRESHOLD = histories_config.keyword_fuzz_threshold
 RECALL_LIMIT = histories_config.recall_limit
+MAX_MEMORY_SIZE = histories_config.max_memory_size
 
 
 def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
@@ -28,7 +30,7 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
     if KEY_HISTORY_INDEX in extra:
         index = cast(HistoryIndex, extra[KEY_HISTORY_INDEX])
     else:
-        entries = []
+        entries = list[HistoryEntry]()
         for path in tuple(processed_dir.iterdir()):
             history = HistoryEntry.from_file(path)
             if history is None:
@@ -85,6 +87,41 @@ async def intro_retrieve_history(agent: CloversAgent, session: Session):
     memories = ["# 相关历史记录\n"]
     memories.extend(format_entry(*x) for x in enumerate(entries, start=1))
     return "\n".join(memories)
+
+
+def archive_history(session: Session):
+    processed_dir = session.session_dir / "histories_processed"
+    if not processed_dir.exists():
+        return
+    unrecognized_dir = session.session_dir / "histories_unrecognized"
+    unrecognized_dir.mkdir(parents=True, exist_ok=True)
+    archived_dir = session.session_dir / "histories_archived"
+    archived_dir.mkdir(parents=True, exist_ok=True)
+    hp_lst = list[tuple[HistoryEntry, Path]]()
+    for path in tuple(processed_dir.iterdir()):
+        history = HistoryEntry.from_file(path)
+        if history is None:
+            shutil.move(path, unrecognized_dir)
+            continue
+        hp_lst.append((history, path))
+    delete_count = len(hp_lst) - MAX_MEMORY_SIZE
+    if delete_count <= 0:
+        return
+    with contextlib.suppress(KeyError):
+        del session.extra[KEY_HISTORY_ENTRIES]
+    for history, path in heapq.nsmallest(delete_count, hp_lst, key=lambda x: x[0].timestamp):
+        target_dir = archived_dir / datetime.fromtimestamp(history.timestamp).strftime("%Y%m")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.move(path, target_dir)
+
+
+def daily_task(agent: CloversAgent):
+    for session in agent.sessions.values():
+        with contextlib.suppress(Exception):
+            archive_history(session)
+
+
+TOOLS.on_startup(lambda agent: agent.daily_tasks.append(daily_task))
 
 
 @TOOLS.register(
