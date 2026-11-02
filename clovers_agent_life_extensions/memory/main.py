@@ -97,22 +97,22 @@ def archive_history(session: Session):
     unrecognized_dir.mkdir(parents=True, exist_ok=True)
     archived_dir = session.session_dir / "histories_archived"
     archived_dir.mkdir(parents=True, exist_ok=True)
-    hp_lst = list[tuple[HistoryEntry, Path]]()
-    for path in tuple(processed_dir.iterdir()):
-        history = HistoryEntry.from_file(path)
-        if history is None:
-            shutil.move(path, unrecognized_dir)
-            continue
-        hp_lst.append((history, path))
-    delete_count = len(hp_lst) - MAX_MEMORY_SIZE
+    extra = session.extra
+    try:
+        index = cast(HistoryIndex, extra[KEY_HISTORY_INDEX])
+    except KeyError:
+        return
+    entries = index.entries
+    delete_count = len(entries) - MAX_MEMORY_SIZE
     if delete_count <= 0:
         return
     with contextlib.suppress(KeyError):
         del session.extra[KEY_HISTORY_ENTRIES]
-    for history, path in heapq.nsmallest(delete_count, hp_lst, key=lambda x: x[0].timestamp):
+    for history in heapq.nsmallest(delete_count, entries, key=lambda x: x.timestamp):
         target_dir = archived_dir / datetime.fromtimestamp(history.timestamp).strftime("%Y%m")
         target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.move(path, target_dir)
+        shutil.move(history.path, target_dir)
+        entries.remove(history)
 
 
 def daily_task(agent: CloversAgent):
