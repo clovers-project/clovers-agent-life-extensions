@@ -8,11 +8,13 @@ from .memory import intro_retrieve_history
 @TOOLS.on_intro(ON_CHAT)
 async def _(agent: CloversAgent, turn: Turn, event: Event):
     session = agent.current_session(turn.session_id)
-    unit = [
+    units = [
         await intro_retrieve_history(agent, session),
         intro_user_profile(session, event),
     ]
-    return "\n---\n".join(filter(None, unit))
+    for unit in units:
+        print(unit)
+    return "\n---\n".join(filter(None, units))
 
 
 __version__ = "0.3.0"

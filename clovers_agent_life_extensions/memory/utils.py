@@ -204,6 +204,7 @@ class HistoryIndex:
         keyword_aliases = self.keyword_aliases
         keywords_by_first_char = self.keywords_by_first_char
         tokens = set[str]()
+        sentence = sentence.lower()
         i, n = 0, len(sentence)
         while i < n:
             c = sentence[i]
