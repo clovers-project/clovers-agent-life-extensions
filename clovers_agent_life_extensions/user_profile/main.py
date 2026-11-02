@@ -58,14 +58,16 @@ def intro_user_profile(session: Session, event: Event) -> str:
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, block_days: int = 7):
     user_id = event.user_id
-    user_profile_json = USER_PROFILE / f"{user_id}.json"
+    user_profile_file = USER_PROFILE / f"{user_id}.json"
+    USER_PROFILE.mkdir(parents=True, exist_ok=True)
     block_t = min(max(block_days, 1), 30) * 86400 + time.time()
-    if user_profile_json.exists():
-        user_profile = UserProfile.model_validate_json(user_profile_json.read_text(encoding="utf-8"))
+    try:
+        data = user_profile_file.read_text(encoding="utf-8")
+        user_profile = UserProfile.model_validate_json(data)
         user_profile.block_until = block_t
-    else:
+    except (FileNotFoundError, pydantic.ValidationError, json.JSONDecodeError):
         user_profile = UserProfile(nickname=event.nickname, block_until=block_t)
-    user_profile_json.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
+    user_profile_file.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
     return f"OK"
 
 
@@ -109,16 +111,13 @@ async def _(
     demote_memory_ids: list[int] | None = None,
 ):
     user_id = event.user_id
-    profile_path = USER_PROFILE / f"{user_id}.json"
+    user_profile_file = USER_PROFILE / f"{user_id}.json"
     USER_PROFILE.mkdir(parents=True, exist_ok=True)
-    if not profile_path.exists():
+    try:
+        data = user_profile_file.read_text(encoding="utf-8")
+        user_profile = UserProfile.model_validate_json(data)
+    except (FileNotFoundError, pydantic.ValidationError, json.JSONDecodeError):
         user_profile = UserProfile()
-    else:
-        data = profile_path.read_text(encoding="utf-8")
-        try:
-            user_profile = UserProfile.model_validate_json(data)
-        except (pydantic.ValidationError, json.JSONDecodeError):
-            user_profile = UserProfile()
     user_profile.nickname = event.nickname
     if address_as:
         user_profile.address_as = address_as
@@ -161,7 +160,7 @@ async def _(
         memories = sorted((x for x in memories if x[1] >= 0), key=lambda x: x[1], reverse=True)
     user_profile.memories.clear()
     user_profile.memories.extend({"id": i, "content": c, "star": star} for i, (c, star) in enumerate(memories, 1))
-    profile_path.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
+    user_profile_file.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
     with contextlib.suppress(KeyError):
         del turn.extra[UPDATE_USER_PROFILE][user_id]
     return "OK"
