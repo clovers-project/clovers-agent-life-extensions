@@ -9,7 +9,13 @@ from clovers_agent.session import InputTag, Session
 from clovers_agent.constants import ON_CHAT
 from ..base import TOOLS, CONFIG
 from .utils import HistoryEntry, IndexedHistory, HistoryIndex
-from .constant import KEY_HISTORY_INDEX, KEY_HISTORY_ENTRIES
+from .constant import (
+    KEY_HISTORY_INDEX,
+    KEY_HISTORY_ENTRIES,
+    HISTORIES_PROCESSED,
+    HISTORIES_UNRECOGNIZED,
+    HISTORIES_ARCHIVED,
+)
 
 from typing import cast
 
@@ -22,10 +28,12 @@ MAX_MEMORY_SIZE = histories_config.max_memory_size
 async def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
     history_dir = session.history_dir
     history_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir = session.session_dir / "histories_processed"
+    processed_dir = session.session_dir / HISTORIES_PROCESSED
     processed_dir.mkdir(parents=True, exist_ok=True)
-    unrecognized_dir = session.session_dir / "histories_unrecognized"
+    unrecognized_dir = session.session_dir / HISTORIES_UNRECOGNIZED
     unrecognized_dir.mkdir(parents=True, exist_ok=True)
+    archived_dir = session.session_dir / HISTORIES_ARCHIVED
+    archived_dir.mkdir(parents=True, exist_ok=True)
     extra = session.extra
     if KEY_HISTORY_INDEX in extra:
         index = cast(HistoryIndex, extra[KEY_HISTORY_INDEX])
@@ -38,6 +46,15 @@ async def prepare_history_index(agent: CloversAgent, session: Session) -> Histor
                 continue
             entries.append(history)
         index = await asyncio.to_thread(HistoryIndex, KEYWORD_FUZZ_THRESHOLD, entries, agent.sentence_model)
+        achived_keywords = set[str]()
+        for path in archived_dir.rglob("*.md"):
+            entry = HistoryEntry.from_file(path)
+            if entry is None:
+                shutil.move(path, unrecognized_dir)
+                continue
+            achived_keywords.update(entry.keywords)
+        if achived_keywords:
+            index.update_keywords(achived_keywords)
         extra[KEY_HISTORY_INDEX] = index
     hp_lst = list[tuple[HistoryEntry, Path]]()
     for path in tuple(history_dir.iterdir()):
@@ -90,12 +107,12 @@ async def intro_retrieve_history(agent: CloversAgent, session: Session):
 
 
 def archive_history(session: Session):
-    processed_dir = session.session_dir / "histories_processed"
+    processed_dir = session.session_dir / HISTORIES_PROCESSED
     if not processed_dir.exists():
         return
-    unrecognized_dir = session.session_dir / "histories_unrecognized"
+    unrecognized_dir = session.session_dir / HISTORIES_UNRECOGNIZED
     unrecognized_dir.mkdir(parents=True, exist_ok=True)
-    archived_dir = session.session_dir / "histories_archived"
+    archived_dir = session.session_dir / HISTORIES_ARCHIVED
     archived_dir.mkdir(parents=True, exist_ok=True)
     extra = session.extra
     try:

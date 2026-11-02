@@ -105,6 +105,26 @@ class HistoryIndex:
             self.keyword_aliases[keyword] = keyword
             self.canonical_keywords.add(keyword)
 
+    def update_keywords(self, keywords: set[str]):
+        known_keywords = self.known_keywords
+        known_keywords.update(keywords)
+        for keyword in keywords:
+            self.register_keyword(keyword)
+        normalize_keywords = self.normalize_keywords(keywords)
+        self.document_frequency.update(normalize_keywords)
+        diff = keywords.difference(known_keywords)
+        known_keywords.update(diff)
+        first_chars = set[str]()
+        keywords_by_first_char = self.keywords_by_first_char
+        for kw in diff:
+            keywords_by_first_char[kw[0]].append(kw)
+            first_chars.add(kw[0])
+        for char in first_chars:
+            keywords_by_first_char[char].sort(key=len, reverse=True)
+        sorted_keywords = self.sorted_keywords
+        sorted_keywords.extend(diff)
+        sorted_keywords.sort(key=len, reverse=True)
+
     def normalize_keywords(self, keywords: Iterable[str]) -> set[str]:
         return {self.keyword_aliases[keyword] for keyword in keywords}
 
