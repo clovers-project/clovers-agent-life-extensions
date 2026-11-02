@@ -91,11 +91,11 @@ def format_entry(i: int, entry: HistoryEntry):
 async def intro_retrieve_history(agent: CloversAgent, session: Session):
     history_index = await prepare_history_index(agent, session)
     message = "\n".join(format_message(t, c) for t, c, _ in session.message_history)
-    lst = await asyncio.to_thread(history_index.search, message)
-    if not lst:
-        return ""
-    top = heapq.nlargest(RECALL_LIMIT, lst, key=lambda x: x[0])
     entries = session.extra[KEY_HISTORY_ENTRIES] = cast(list[IndexedHistory], [])
+    scored = await asyncio.to_thread(history_index.search, message)
+    if not scored:
+        return ""
+    top = heapq.nlargest(RECALL_LIMIT, scored, key=lambda x: x[0])
     avg_score = sum(score for score, _ in top) / len(top)
     for score, meta in top:
         if score < avg_score:

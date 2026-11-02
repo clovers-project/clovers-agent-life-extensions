@@ -106,12 +106,11 @@ class HistoryIndex:
             self.canonical_keywords.add(keyword)
 
     def update_keywords(self, keywords: set[str]):
-        known_keywords = self.known_keywords
-        known_keywords.update(keywords)
         for keyword in keywords:
             self.register_keyword(keyword)
         normalize_keywords = self.normalize_keywords(keywords)
         self.document_frequency.update(normalize_keywords)
+        known_keywords = self.known_keywords
         diff = keywords.difference(known_keywords)
         known_keywords.update(diff)
         first_chars = set[str]()
@@ -145,6 +144,7 @@ class HistoryIndex:
         self.sorted_keywords: list[str]
         self.keywords_by_first_char: defaultdict[str, list[str]] = defaultdict(list)
         if not entries:
+            self.sorted_keywords = []
             return
         known_keywords = self.known_keywords
         for entry in entries:
