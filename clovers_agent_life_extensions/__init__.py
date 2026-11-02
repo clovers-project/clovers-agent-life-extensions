@@ -17,5 +17,5 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     return "\n---\n".join(filter(None, units))
 
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = ["TOOLS"]
