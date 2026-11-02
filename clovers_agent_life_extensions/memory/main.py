@@ -19,7 +19,7 @@ RECALL_LIMIT = histories_config.recall_limit
 MAX_MEMORY_SIZE = histories_config.max_memory_size
 
 
-def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
+async def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex:
     history_dir = session.history_dir
     history_dir.mkdir(parents=True, exist_ok=True)
     processed_dir = session.session_dir / "histories_processed"
@@ -37,7 +37,7 @@ def prepare_history_index(agent: CloversAgent, session: Session) -> HistoryIndex
                 shutil.move(path, unrecognized_dir)
                 continue
             entries.append(history)
-        index = HistoryIndex(KEYWORD_FUZZ_THRESHOLD, entries, agent.sentence_model)
+        index = await asyncio.to_thread(HistoryIndex, KEYWORD_FUZZ_THRESHOLD, entries, agent.sentence_model)
         extra[KEY_HISTORY_INDEX] = index
     hp_lst = list[tuple[HistoryEntry, Path]]()
     for path in tuple(history_dir.iterdir()):
@@ -72,7 +72,7 @@ def format_entry(i: int, entry: HistoryEntry):
 
 
 async def intro_retrieve_history(agent: CloversAgent, session: Session):
-    history_index = prepare_history_index(agent, session)
+    history_index = await prepare_history_index(agent, session)
     message = "\n".join(format_message(t, c) for t, c, _ in session.message_history)
     lst = await asyncio.to_thread(history_index.search, message)
     if not lst:

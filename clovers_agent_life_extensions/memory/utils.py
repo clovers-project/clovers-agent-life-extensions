@@ -124,6 +124,8 @@ class HistoryIndex:
         self.known_keywords: set[str] = set()
         self.sorted_keywords: list[str]
         self.keywords_by_first_char: defaultdict[str, list[str]] = defaultdict(list)
+        if not entries:
+            return
         known_keywords = self.known_keywords
         for entry in entries:
             known_keywords.update(entry.keywords)
