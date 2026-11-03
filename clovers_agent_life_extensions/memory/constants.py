@@ -1,4 +1,4 @@
-from ..constant import LIFE
+from ..constants import LIFE
 
 KEY_HISTORY_INDEX = f"{LIFE}.history_index"
 KEY_HISTORY_ENTRIES = f"{LIFE}.history_entries"

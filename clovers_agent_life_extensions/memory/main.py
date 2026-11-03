@@ -9,7 +9,7 @@ from clovers_agent.session import InputTag, Session
 from clovers_agent.constants import ON_CHAT
 from ..base import TOOLS, CONFIG
 from .utils import HistoryEntry, IndexedHistory, HistoryIndex
-from .constant import (
+from .constants import (
     KEY_HISTORY_INDEX,
     KEY_HISTORY_ENTRIES,
     HISTORIES_PROCESSED,
