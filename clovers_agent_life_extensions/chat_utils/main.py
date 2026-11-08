@@ -133,7 +133,7 @@ if chat_config.mimo_tts.api_key:
         audio_bytes = base64.b64decode(audio_data)
         if not audio_bytes:
             return "语音生成失败：返回的音频为空。"
-        await event.send("voice", audio_data)
+        await event.send("voice", audio_bytes)
         return "OK"
 
 
