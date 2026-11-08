@@ -1,15 +1,20 @@
 import time
-import json
 import contextlib
-import pydantic
 from pathlib import Path
 from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.session import Session
 from clovers_agent.config import CONFIG as AGENT_CONFIG
-from clovers_agent.constants import ON_CHAT
-from .constants import UPDATE_USER_PROFILE, UPDATE_USER_PROFILE_PROMPT, EDIT_USER_PROFILE
+from clovers_agent.constants import ON_CHAT, ROUTER_INTRO
+from .constants import (
+    KEY_USER_PROFILES,
+    KEY_PROFILE_UPDATE_TURNS,
+    UPDATE_USER_PROFILE,
+    UPDATE_USER_PROFILE_PROMPT,
+    EDIT_USER_PROFILE,
+)
 from ..base import TOOLS, CONFIG
 
+from typing import cast
 from .typing import UserProfile, MemoryItem, MemoryItemTuple
 
 user_profile = CONFIG.user_profile
@@ -21,26 +26,34 @@ PROFILE_MEMORY_SIZE = user_profile.profile_memory_size
 USER_PROFILE = Path(AGENT_CONFIG.path) / "UserProfile"
 
 
+@TOOLS.on_intro(ROUTER_INTRO)
+async def _(agent: CloversAgent, turn: Turn, event: Event):
+    session = agent.current_session(turn.session_id)
+    extra = session.extra
+    if KEY_USER_PROFILES not in extra:
+        extra[KEY_USER_PROFILES] = {}
+    else:
+        user_profiles = extra[KEY_USER_PROFILES]
+        user_id = event.user_id
+        if user_id in user_profiles:
+            user_profile = cast(UserProfile, user_profiles[user_id])
+            if user_profile.block_until > time.time():
+                session.complete_session()
+    return ""
+
+
 def intro_user_profile(session: Session, event: Event) -> str:
     extra = session.extra
-    if UPDATE_USER_PROFILE not in extra:
-        extra[UPDATE_USER_PROFILE] = {}
-    counter = extra[UPDATE_USER_PROFILE]
     user_id = event.user_id
+    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
+    if user_profile is None:
+        return f"# 用户档案：{event.nickname}\n\n目前尚无该用户档案，请在**上下文足够充分**时进行使用 '{UPDATE_USER_PROFILE}' 工具进行第一次更新。"
+    if KEY_PROFILE_UPDATE_TURNS not in extra:
+        counter = extra[KEY_PROFILE_UPDATE_TURNS] = {}
+    else:
+        counter = extra[KEY_PROFILE_UPDATE_TURNS]
     count = counter[user_id] = counter.get(user_id, 0) + 1
-    notes = []
-    profile_path = USER_PROFILE / f"{user_id}.json"
-    if not profile_path.exists():
-        return f"# 用户档案：{event.nickname}\n\n目前尚无该用户档案，请在**上下文足够充分**时进行使用 '{UPDATE_USER_PROFILE}' 工具进行第一次更新。"
-    data = profile_path.read_text(encoding="utf-8")
-    try:
-        user_profile = UserProfile.model_validate_json(data)
-    except (pydantic.ValidationError, json.JSONDecodeError):
-        profile_path.unlink()
-        return f"# 用户档案：{event.nickname}\n\n目前尚无该用户档案，请在**上下文足够充分**时进行使用 '{UPDATE_USER_PROFILE}' 工具进行第一次更新。"
-    if user_profile.block_until > time.time():
-        session.complete_session()
-    notes.append(user_profile.to_markdown())
+    notes = [user_profile.to_markdown()]
     if count > STRONG_REMINDER_TURNS:
         notes.append(f"档案在 {count} 轮对话前更新。请及时使用 '{UPDATE_USER_PROFILE}' 工具对档案进行更新。")
     elif count > REMINDER_TURNS:
@@ -58,15 +71,15 @@ def intro_user_profile(session: Session, event: Event) -> str:
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, block_days: int = 7):
     user_id = event.user_id
-    user_profile_file = USER_PROFILE / f"{user_id}.json"
-    USER_PROFILE.mkdir(parents=True, exist_ok=True)
+    extra = turn.extra
+    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
     block_t = min(max(block_days, 1), 30) * 86400 + time.time()
-    try:
-        data = user_profile_file.read_text(encoding="utf-8")
-        user_profile = UserProfile.model_validate_json(data)
-        user_profile.block_until = block_t
-    except (FileNotFoundError, pydantic.ValidationError, json.JSONDecodeError):
+    if user_profile is None:
         user_profile = UserProfile(nickname=event.nickname, block_until=block_t)
+    else:
+        user_profile.block_until = block_t
+    USER_PROFILE.mkdir(parents=True, exist_ok=True)
+    user_profile_file = USER_PROFILE / f"{user_id}.json"
     user_profile_file.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
     return f"OK"
 
@@ -91,9 +104,9 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, **kwargs):
         "new_memories": {"type": "array", "items": {"type": "string"}},
         "promote_memories": {
             "type": "array",
-            "items": {"type": "object", "properties": {"id": {"type": "number"}, "content": {"type": "string"}}},
+            "items": {"type": "object", "properties": {"id": {"type": "integer"}, "content": {"type": "string"}}},
         },
-        "demote_memory_ids": {"type": "array", "items": {"type": "number"}},
+        "demote_memory_ids": {"type": "array", "items": {"type": "integer"}},
     },
     category=ON_CHAT,
     required=[],
@@ -111,12 +124,9 @@ async def _(
     demote_memory_ids: list[int] | None = None,
 ):
     user_id = event.user_id
-    user_profile_file = USER_PROFILE / f"{user_id}.json"
-    USER_PROFILE.mkdir(parents=True, exist_ok=True)
-    try:
-        data = user_profile_file.read_text(encoding="utf-8")
-        user_profile = UserProfile.model_validate_json(data)
-    except (FileNotFoundError, pydantic.ValidationError, json.JSONDecodeError):
+    extra = turn.extra
+    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
+    if user_profile is None:
         user_profile = UserProfile()
     user_profile.nickname = event.nickname
     if address_as:
@@ -160,7 +170,9 @@ async def _(
         memories = sorted((x for x in memories if x[1] >= 0), key=lambda x: x[1], reverse=True)
     user_profile.memories.clear()
     user_profile.memories.extend({"id": i, "content": c, "star": star} for i, (c, star) in enumerate(memories, 1))
+    USER_PROFILE.mkdir(parents=True, exist_ok=True)
+    user_profile_file = USER_PROFILE / f"{user_id}.json"
     user_profile_file.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
     with contextlib.suppress(KeyError):
-        del turn.extra[UPDATE_USER_PROFILE][user_id]
+        del turn.extra[KEY_PROFILE_UPDATE_TURNS][user_id]
     return "OK"

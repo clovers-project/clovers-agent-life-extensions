@@ -1,3 +1,8 @@
+from ..constants import LIFE
+
+KEY_USER_PROFILES = f"{LIFE}.user_profiles"
+KEY_PROFILE_UPDATE_TURNS = "{LIFE}.profile_update_turns"
+
 UPDATE_USER_PROFILE = "update_user_profile"
 EDIT_USER_PROFILE = "edit_user_profile"
 UPDATE_USER_PROFILE_PROMPT = f"""\
