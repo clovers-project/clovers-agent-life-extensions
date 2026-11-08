@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
-config.toml
-batch_state.json
-*.b64
+StickerPack/config.toml
+StickerPack/batch_state.json
+StickerPack/*.b64
+StickerPack/metadata.jsonl
