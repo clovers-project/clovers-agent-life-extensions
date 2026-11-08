@@ -1,9 +1,11 @@
 from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.constants import ON_CHAT
-from .base import TOOLS
+from .base import TOOLS, CONFIG
 from .user_profile import intro_user_profile
 from .memory import intro_retrieve_history
-from .chat_utils import SEND_STIKER_PROMPT
+from . import chat_utils as chat_utils
+
+STICKER_PROMPT = CONFIG.chat.sticker_prompt
 
 
 @TOOLS.on_intro(ON_CHAT)
@@ -12,7 +14,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     units = [
         await intro_retrieve_history(agent, session),
         intro_user_profile(session, event),
-        SEND_STIKER_PROMPT,
+        STICKER_PROMPT,
     ]
     return "\n---\n".join(filter(None, units))
 

@@ -3,6 +3,7 @@ import json
 import base64
 import random
 import hashlib
+import asyncio
 from pathlib import Path
 from clovers import Result
 from clovers_agent import CloversAgent, Turn, Event
@@ -24,7 +25,7 @@ STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
 
 @TOOLS.register(
     "save_sticker",
-    "将用户发送的图片保存到自己的贴纸收藏。",
+    "将用户发送的图片保存到自己的贴纸收藏，不适合当作贴纸图片请不要保存。",
     {
         "image_index": {
             "type": "integer",
@@ -88,16 +89,16 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
         stickers = cast(list[tuple[str, str]], extra[KEY_STICKER_PACK])
     if not stickers:
         return "没有可用的贴纸。"
-    turn.create_turn()
     if len(stickers) > MAX_STICKER_CANDIDATES:
         similarities = batch_similarity([x for _, x in stickers], intent, agent.sentence_model)
         lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
         stickers = [sticker for _, sticker in lst]
-    prompt = SEND_STICKER_PROMPT.format("\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
-    turn.create_payload(agent.api("router"), prompt)
-    turn.input_text(intent)
-    turn.payload["response_format"] = {"type": "json_object"}
-    message = await turn.call_api()
+    prompt = SEND_STICKER_PROMPT.format(candidates="\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
+    api = agent.api("router")
+    payload = api.build_payload(prompt)
+    payload["messages"].append({"role": "user", "content": intent})
+    payload["response_format"] = {"type": "json_object"}
+    message = await api.call_api(payload, turn.usage_counter)
     sticker_id = cast(int, random.choice(json.loads(message["content"])))
     name, desc = stickers[sticker_id]
     file = STIKER_PACK / name
@@ -143,12 +144,19 @@ if chat_config.mimo_tts.api_key:
     category=ON_CHAT,
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, message: str):
+    if not event.group_id:
+        return "发送失败：目标回话即为当前会话"
     target = agent.current_session(f"private-{event.user_id}")
     timestamp = agent.current_session(turn.session_id).last_active_time
-    async with target.execute_lock, target.aside_lock:
-        await event.send("private_message", {"user_id": event.user_id, "data": Result("text", message)})
-        target.record_history(event.nickname, event.message, timestamp)
-        target.record_history(InputTag.ASSISTANT, message, timestamp)
+
+    async def send():
+        async with target.execute_lock, target.aside_lock:
+            await event.send("private_message", {"user_id": event.user_id, "data": Result("text", message)})
+            content = f"{event.message}\n（本条消息来自[{turn.session_id}];该消息触发了一条私聊消息;当前回话[{target.session_id}]）"
+            target.record_history(event.nickname, content, timestamp)
+            target.record_history(InputTag.ASSISTANT, message, timestamp)
+
+    asyncio.create_task(send())
     return "OK"
 
 
@@ -162,10 +170,17 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, message: str):
     category=ON_CHAT,
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, group_id: str, message: str):
+    if group_id == event.group_id:
+        return "发送失败：目标回话即为当前会话"
     target = agent.current_session(group_id)
     timestamp = agent.current_session(turn.session_id).last_active_time
-    async with target.execute_lock, target.aside_lock:
-        await event.send("group_message", {"group_id": group_id, "data": Result("text", message)})
-        target.record_history(event.nickname, event.message, timestamp)
-        target.record_history(InputTag.ASSISTANT, message, timestamp)
+
+    async def send():
+        async with target.execute_lock, target.aside_lock:
+            await event.send("group_message", {"group_id": group_id, "data": Result("text", message)})
+            content = f"{event.message}\n（本条消息来自[{turn.session_id}];该消息触发了一条跨群消息;当前回话[{target.session_id}]）"
+            target.record_history(event.nickname, content, timestamp)
+            target.record_history(InputTag.ASSISTANT, message, timestamp)
+
+    asyncio.create_task(send())
     return "OK"

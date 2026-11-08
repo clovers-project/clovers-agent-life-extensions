@@ -31,7 +31,7 @@ class ChatConfig(BaseModel):
         api_key="",
         extra_body={"format": "wav", "voice": "mimo_default"},
     )
-    send_sticker_prompt: str = """\
+    sticker_prompt: str = """\
 你可以使用 `send_sticker` 工具发送贴纸，以贴纸代替文字回应当前对话。调用后，对话会立即结束。
 
 - 当贴纸能够自然表达情绪、态度或回应时，优先考虑使用；无主题闲聊也可以用贴纸参与互动。
