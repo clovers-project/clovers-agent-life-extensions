@@ -27,10 +27,14 @@ class ChatConfig(BaseModel):
     max_sticker_candidates: int = 32
     mimo_tts: OpenAIConfig = OpenAIConfig(
         url="https://api.xiaomimimo.com/v1",
-        model="mimo-v2.5-tts",
+        model="mimo-v2.5-tts-voicedesign",
         api_key="",
-        extra_body={"audio": {"format": "wav", "voice": "mimo_default"}},
+        extra_body={"audio": {"format": "wav"}},
     )
+    voice_design_prompt: str = """\
+年轻成年女性，声音甜美软糯，带有轻微的鼻音和清脆的少女感，音调偏高但不尖锐。
+说话活泼俏皮，语气自然亲近，偶尔带一点小傲娇和撒娇感，像一只喜欢在群里冒泡、分享日常、和群友打趣的小猫娘。
+语速轻快，节奏灵动，聊天时会自然地拖长尾音，偶尔发出轻轻的笑声，带着一点慵懒和调皮，整体感觉真实、可爱、有亲和力。"""
     sticker_prompt: str = """\
 你可以使用 `send_sticker` 工具发送贴纸，以贴纸代替文字回应当前对话。调用该工具后，对话会立即结束。
 

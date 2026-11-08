@@ -19,6 +19,7 @@ from typing import cast
 
 chat_config = CONFIG.chat
 MAX_STICKER_CANDIDATES = chat_config.max_sticker_candidates
+VOICE_DESIGN_PROMPT = chat_config.voice_design_prompt
 STIKER_PACK = Path(AGENT_CONFIG.path) / "StickerPack"
 STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
 
@@ -145,21 +146,15 @@ if chat_config.mimo_tts.api_key:
             payload["messages"].append({"role": "user", "content": f"风格要求：{style}\n语音文本：{content}"})
             message = await api.call_api(payload, turn.usage_counter)
             content = message["content"]
-            print(content)
-
         payload = MIMO_TTS_API.build_payload()
-        payload["messages"].append({"role": "user", "content": style})
+        payload["messages"].append({"role": "user", "content": VOICE_DESIGN_PROMPT})
         payload["messages"].append({"role": "assistant", "content": content})
-
-        for voice in ("冰糖", "茉莉", "Mia", "Chloe"):
-            payload["audio"]["voice"] = voice
-            message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
-            audio_data = cast(str, message["audio"]["data"])  # type: ignore
-            audio_bytes = base64.b64decode(audio_data)
-            if not audio_bytes:
-                continue
-                return "语音生成失败：返回的音频为空。"
-            await event.send("voice", audio_bytes)
+        message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
+        audio_data = cast(str, message["audio"]["data"])  # type: ignore
+        audio_bytes = base64.b64decode(audio_data)
+        if not audio_bytes:
+            return "语音生成失败：返回的音频为空。"
+        await event.send("voice", audio_bytes)
         return "OK"
 
 
