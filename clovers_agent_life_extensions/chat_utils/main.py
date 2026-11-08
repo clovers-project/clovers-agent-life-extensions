@@ -10,7 +10,7 @@ from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.api import OpenAIAPI
 from clovers_agent.session import InputTag
 from clovers_agent.embedding import batch_similarity
-from clovers_agent.utils import load_jsonl, save_jsonl
+from clovers_agent.utils import load_jsonl, save_jsonl, to_b64url
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
 from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT, SEND_VOICE_PROMPT
@@ -19,9 +19,10 @@ from typing import cast
 
 chat_config = CONFIG.chat
 MAX_STICKER_CANDIDATES = chat_config.max_sticker_candidates
-VOICE_DESIGN_PROMPT = chat_config.voice_design_prompt
-STIKER_PACK = Path(AGENT_CONFIG.path) / "StickerPack"
-STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
+AGENT_PATH = Path(AGENT_CONFIG.path)
+STIKER_PACK = AGENT_PATH / "StickerPack"
+CHAT_UTILS_PATH = AGENT_PATH / "chat_utils"
+STIKER_PACK_METADATA = STIKER_PACK / "metadata.jsonl"
 
 
 @TOOLS.register(
@@ -109,7 +110,13 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
     session.complete_session()
 
 
-if chat_config.mimo_tts.api_key:
+ref_voice = next((x for x in CHAT_UTILS_PATH.iterdir() if x.stem == "ref_voice"), None)
+if ref_voice:
+    REF_VOICE = to_b64url(ref_voice.read_bytes(), ("mpeg", "mp3", "wav"))
+else:
+    REF_VOICE = None
+
+if REF_VOICE and chat_config.mimo_tts.api_key:
 
     @TOOLS.on_startup
     async def _(agent: CloversAgent):
@@ -120,11 +127,11 @@ if chat_config.mimo_tts.api_key:
         "send_voice",
         "发送一条语音消息，可自定义语气、情绪和表达风格，也支持唱歌。",
         {
-            "content": {"type": "string", "description": "语音内容"},
+            "content": {"type": "string", "description": "语音内容，用标准标点符号标记语气或停顿"},
             "style": {"type": "string", "description": "描述这段话以什么样的表达风格说出来"},
             "sing": {
                 "type": "boolean",
-                "description": "是否以唱歌的方式发送语音。默认为 false。设为 true 时，content 应填写纯歌词且不需要提供 style。",
+                "description": "是否以唱歌的方式发送语音。默认为 false。设为 true 时，content 应填写纯歌词且不需要提供 style",
             },
         },
         category=ON_CHAT,
@@ -138,17 +145,18 @@ if chat_config.mimo_tts.api_key:
         style: str = "",
         sing: bool = False,
     ):
-        api = turn.api
         if sing:
             content = f"(唱歌){content}"
         elif style:
+            api = agent.api("voice_style")
             payload = api.build_payload(SEND_VOICE_PROMPT)
             payload["messages"].append({"role": "user", "content": f"风格要求：{style}\n语音文本：{content}"})
             message = await api.call_api(payload, turn.usage_counter)
             content = message["content"]
         payload = MIMO_TTS_API.build_payload()
-        payload["messages"].append({"role": "user", "content": VOICE_DESIGN_PROMPT})
+        payload["messages"].append({"role": "user", "content": style})
         payload["messages"].append({"role": "assistant", "content": content})
+        payload["audio"]["voice"] = REF_VOICE
         message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
         audio_data = cast(str, message["audio"]["data"])  # type: ignore
         audio_bytes = base64.b64decode(audio_data)
