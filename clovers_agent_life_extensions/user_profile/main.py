@@ -28,17 +28,26 @@ USER_PROFILE = Path(AGENT_CONFIG.path) / "UserProfile"
 
 @TOOLS.on_intro(ROUTER_INTRO)
 async def _(agent: CloversAgent, turn: Turn, event: Event):
-    session = agent.current_session(turn.session_id)
-    extra = session.extra
+    extra = turn.extra
+    user_id = event.user_id
     if KEY_USER_PROFILES not in extra:
-        extra[KEY_USER_PROFILES] = {}
+        user_profiles = extra[KEY_USER_PROFILES] = {}
     else:
         user_profiles = extra[KEY_USER_PROFILES]
-        user_id = event.user_id
-        if user_id in user_profiles:
-            user_profile = cast(UserProfile, user_profiles[user_id])
-            if user_profile.block_until > time.time():
-                session.complete_session()
+    if user_id in user_profiles:
+        return ""
+    user_profile_file = USER_PROFILE / f"{user_id}.json"
+    if not user_profile_file.exists():
+        return ""
+    try:
+        data = user_profile_file.read_text(encoding="utf-8")
+        user_profile = UserProfile.model_validate_json(data)
+    except Exception:
+        user_profile_file.unlink()
+        return ""
+    user_profiles[user_id] = user_profile
+    if user_profile.block_until > time.time():
+        agent.current_session(turn.session_id).complete_session()
     return ""
 
 
@@ -71,11 +80,11 @@ def intro_user_profile(session: Session, event: Event) -> str:
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, block_days: int = 7):
     user_id = event.user_id
-    extra = turn.extra
-    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
+    user_profiles = cast(dict[str, UserProfile], turn.extra[KEY_USER_PROFILES])
+    user_profile = user_profiles.get(event.user_id)
     block_t = min(max(block_days, 1), 30) * 86400 + time.time()
     if user_profile is None:
-        user_profile = UserProfile(nickname=event.nickname, block_until=block_t)
+        user_profile = user_profiles[user_id] = UserProfile(nickname=event.nickname, block_until=block_t)
     else:
         user_profile.block_until = block_t
     USER_PROFILE.mkdir(parents=True, exist_ok=True)
@@ -124,10 +133,10 @@ async def _(
     demote_memory_ids: list[int] | None = None,
 ):
     user_id = event.user_id
-    extra = turn.extra
-    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
+    user_profiles = cast(dict[str, UserProfile], turn.extra[KEY_USER_PROFILES])
+    user_profile = user_profiles.get(event.user_id)
     if user_profile is None:
-        user_profile = UserProfile()
+        user_profile = user_profiles[user_id] = UserProfile()
     user_profile.nickname = event.nickname
     if address_as:
         user_profile.address_as = address_as
@@ -174,5 +183,5 @@ async def _(
     user_profile_file = USER_PROFILE / f"{user_id}.json"
     user_profile_file.write_text(user_profile.model_dump_json(indent=4), encoding="utf-8")
     with contextlib.suppress(KeyError):
-        del turn.extra[KEY_PROFILE_UPDATE_TURNS][user_id]
+        turn.extra[KEY_PROFILE_UPDATE_TURNS][user_id] = 0
     return "OK"
