@@ -94,7 +94,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
         lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
         stickers = [sticker for _, sticker in lst]
     prompt = SEND_STICKER_PROMPT.format(candidates="\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
-    api = turn.api
+    api = agent.api("sticker")
     payload = api.build_payload(prompt)
     payload["messages"].append({"role": "user", "content": intent})
     payload["response_format"] = {"type": "json_object"}
@@ -141,9 +141,11 @@ if chat_config.mimo_tts.api_key:
         if sing:
             content = f"(唱歌){content}"
         elif style:
-            payload = api.build_payload(SEND_VOICE_PROMPT.format(style=style, content=content))
+            payload = api.build_payload(SEND_VOICE_PROMPT)
+            payload["messages"].append({"role": "user", "content": f"风格要求：{style}\n语音文本：{content}"})
             message = await api.call_api(payload, turn.usage_counter)
             content = message["content"]
+            print(content)
 
         payload = MIMO_TTS_API.build_payload()
         payload["messages"].append({"role": "user", "content": style})
