@@ -29,7 +29,7 @@ class ChatConfig(BaseModel):
         url="https://api.xiaomimimo.com/v1",
         model="mimo-v2.5-tts",
         api_key="",
-        extra_body={"format": "wav", "voice": "mimo_default"},
+        extra_body={"audio": {"format": "wav", "voice": "mimo_default"}},
     )
     sticker_prompt: str = """\
 你可以使用 `send_sticker` 工具发送贴纸，以贴纸代替文字回应当前对话。调用该工具后，对话会立即结束。

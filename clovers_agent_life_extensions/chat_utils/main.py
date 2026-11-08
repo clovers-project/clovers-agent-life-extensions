@@ -94,7 +94,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
         lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
         stickers = [sticker for _, sticker in lst]
     prompt = SEND_STICKER_PROMPT.format(candidates="\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
-    api = agent.api("router")
+    api = agent.api("sticker")
     payload = api.build_payload(prompt)
     payload["messages"].append({"role": "user", "content": intent})
     payload["response_format"] = {"type": "json_object"}
@@ -130,10 +130,9 @@ if chat_config.mimo_tts.api_key:
         payload["messages"].append({"role": "assistant", "content": content})
         message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
         audio_data = cast(str, message["audio"]["data"])  # type: ignore
-        audio_bytes = base64.b64decode(audio_data, validate=True)
-        if not audio_bytes:
+        if not audio_data:
             return "语音生成失败：返回的音频为空。"
-        await event.send("voice", audio_bytes)
+        await event.send("voice", f"data:audio/wav;base64,{audio_data}")
         return "OK"
 
 
