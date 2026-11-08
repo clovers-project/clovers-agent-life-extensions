@@ -1,0 +1,137 @@
+import heapq
+import base64
+import uuid
+from pathlib import Path
+from clovers import Result
+from clovers_agent import CloversAgent, Turn, Event
+from clovers_agent.session import InputTag
+from clovers_agent.embedding import batch_similarity
+from clovers_agent.utils import load_jsonl, save_jsonl
+from clovers_agent.config import CONFIG as AGENT_CONFIG
+from clovers_agent.constants import ON_CHAT
+from .constants import KEY_STIKER_PACK
+from ..base import TOOLS, CONFIG
+from typing import cast
+
+chat_config = CONFIG.chat
+MAX_STICKER_CANDIDATES = chat_config.max_sticker_candidates
+STIKER_PACK = Path(AGENT_CONFIG.path) / "StickerPack"
+STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
+
+
+@TOOLS.register(
+    "save_sticker",
+    "将用户发送的图片保存到自己的贴纸收藏。",
+    {
+        "image_index": {
+            "type": "integer",
+            "description": "要保存的图片序号，从 0 开始，按照图片在当前用户消息中的出现顺序计算。支持负数索引，例如 -1 表示最后一张图片。",
+        },
+        "description": {
+            "type": "string",
+            "description": "为贴纸起一个简短且具有辨识度的描述性名称。结合图片内容、画面中的文字、角色、表情、情绪和表达含义进行描述。",
+        },
+    },
+    category=ON_CHAT,
+)
+async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, description: str):
+    extra = turn.extra
+    if KEY_STIKER_PACK not in extra:
+        stickers = extra[KEY_STIKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+    else:
+        stickers = cast(list[tuple[str, str]], extra[KEY_STIKER_PACK])
+    message = next((x for x in reversed(turn.payload["messages"]) if x["role"] == "user"), None)
+    if not message or not (isinstance(content := message["content"], list)):
+        return "未从当前用户信息中找到图片。"
+    images = [x["image_url"]["url"] for x in content if x["type"] == "image_url"]
+    try:
+        url = images[image_index]
+    except IndexError:
+        return "当前用户消息中不存在指定序号的图片。"
+    data_url = await agent._api.download_url(url)
+    if not data_url:
+        return "下载图片失败"
+    name = next((f for f, d in stickers if d == description), None)
+    if name:
+        file = STIKER_PACK / name
+    else:
+        name = f"{uuid.uuid4()}.b64"
+        file = STIKER_PACK / name
+        sticker = (name, description)
+        save_jsonl(STIKER_PACK_METADATA, sticker)
+        stickers.append(sticker)
+    file.write_text(data_url)
+    return "保存成功"
+
+
+@TOOLS.register(
+    "send_sticker",
+    "发送一张贴纸，发送后立即结束当前对话",
+    {"meaning": {"type": "string", "description": "希望通过贴纸表达的情绪、态度或含义"}},
+    category=ON_CHAT,
+)
+async def _(agent: CloversAgent, turn: Turn, event: Event, meaning: str):
+    extra = turn.extra
+    if KEY_STIKER_PACK not in extra:
+        stickers = extra[KEY_STIKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+    else:
+        stickers = cast(list[tuple[str, str]], extra[KEY_STIKER_PACK])
+    if not stickers:
+        return "没有可用的贴纸。"
+    turn.create_turn()
+    prompts = [
+        "请根据给定的表达意图，从以下贴纸中选择选择语义和情绪最匹配的一张。",
+        "只输出选中贴纸的序号，不输出任何其他内容。",
+        "候选贴纸：",
+    ]
+    if len(stickers) > MAX_STICKER_CANDIDATES:
+        similarities = batch_similarity([x for _, x in stickers], meaning, agent.sentence_model)
+        lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
+        stickers = [sticker for _, sticker in lst]
+    for i, desc in enumerate(stickers, start=1):
+        prompts.append(f"{i}. {desc}")
+    prompts.append(f"表达意图：{meaning}")
+    prompts.append("选出的贴纸序号：")
+    turn.create_payload(agent.api("router"), "\n".join(prompts))
+    sticker_id = int((await turn.call_api())["content"]) - 1
+    name, desc = stickers[sticker_id]
+    file = STIKER_PACK / name
+    await event.send("image", file.read_text())
+    session = agent.current_session(turn.session_id)
+    session.record_history(InputTag.ASSISTANT, f"发送了贴纸 [{desc}]", session.last_active_time)
+    session.complete_session()
+
+
+@TOOLS.register(
+    "send_direct_message",
+    "向用户发送一条私聊消息",
+    {"message": {"type": "string", "description": "消息内容"}},
+    category=ON_CHAT,
+)
+async def _(agent: CloversAgent, turn: Turn, event: Event, message: str):
+    target = agent.current_session(f"private-{event.user_id}")
+    timestamp = agent.current_session(turn.session_id).last_active_time
+    async with target.execute_lock, target.aside_lock:
+        await event.send("private_message", {"user_id": event.user_id, "data": Result("text", message)})
+        target.record_history(event.nickname, event.message, timestamp)
+        target.record_history(InputTag.ASSISTANT, message, timestamp)
+    return "OK"
+
+
+@TOOLS.register(
+    "send_group_message",
+    "向指定群发送一条群消息",
+    {
+        "group_id": {"type": "string", "description": "群ID"},
+        "message": {"type": "string", "description": "消息内容"},
+    },
+    category=ON_CHAT,
+)
+async def _(agent: CloversAgent, turn: Turn, event: Event, group_id: str, message: str):
+    target = agent.current_session(group_id)
+    timestamp = agent.current_session(turn.session_id).last_active_time
+    async with target.execute_lock, target.aside_lock:
+        await event.send("group_message", {"group_id": group_id, "data": Result("text", message)})
+        target.record_history(event.nickname, event.message, timestamp)
+        target.record_history(InputTag.ASSISTANT, message, timestamp)
+    return "OK"

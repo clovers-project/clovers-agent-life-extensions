@@ -17,11 +17,11 @@ from ..base import TOOLS, CONFIG
 from typing import cast
 from .typing import UserProfile, MemoryItem, MemoryItemTuple
 
-user_profile = CONFIG.user_profile
-REMINDER_COOLDOWN_TURNS = user_profile.reminder_cooldown_turns
-REMINDER_TURNS = user_profile.reminder_turns
-STRONG_REMINDER_TURNS = user_profile.strong_reminder_turns
-PROFILE_MEMORY_SIZE = user_profile.profile_memory_size
+user_profile_config = CONFIG.user_profile
+REMINDER_COOLDOWN_TURNS = user_profile_config.reminder_cooldown_turns
+REMINDER_TURNS = user_profile_config.reminder_turns
+STRONG_REMINDER_TURNS = user_profile_config.strong_reminder_turns
+PROFILE_MEMORY_SIZE = user_profile_config.profile_memory_size
 
 USER_PROFILE = Path(AGENT_CONFIG.path) / "UserProfile"
 

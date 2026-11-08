@@ -22,6 +22,11 @@ class MemoryConfig(BaseModel):
     """最大记忆条数"""
 
 
+class ChatConfig(BaseModel):
+    max_sticker_candidates: int = 32
+
+
 class Config(BaseConfig):
     user_profile: UserProfileConfig = UserProfileConfig()
     histories: MemoryConfig = MemoryConfig()
+    chat: ChatConfig = ChatConfig()
