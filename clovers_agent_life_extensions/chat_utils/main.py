@@ -13,7 +13,7 @@ from clovers_agent.embedding import batch_similarity
 from clovers_agent.utils import load_jsonl, save_jsonl
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
-from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT
+from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT, SEND_VOICE_PROMPT
 from ..base import TOOLS, CONFIG
 from typing import cast
 
@@ -94,7 +94,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
         lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
         stickers = [sticker for _, sticker in lst]
     prompt = SEND_STICKER_PROMPT.format(candidates="\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
-    api = agent.api("sticker")
+    api = turn.api
     payload = api.build_payload(prompt)
     payload["messages"].append({"role": "user", "content": intent})
     payload["response_format"] = {"type": "json_object"}
@@ -117,23 +117,47 @@ if chat_config.mimo_tts.api_key:
 
     @TOOLS.register(
         "send_voice",
-        "发送一条语音消息",
+        "发送一条语音消息，可自定义语气、情绪和表达风格，也支持唱歌。",
         {
-            "style": {"type": "string", "description": "语音语气、情绪、语速和语调等，描述这段话以什么样的表达风格说出来。"},
-            "content": {"type": "string", "description": "语音中实际要说出的完整文本。"},
+            "content": {"type": "string", "description": "语音内容"},
+            "style": {"type": "string", "description": "描述这段话以什么样的表达风格说出来"},
+            "sing": {
+                "type": "boolean",
+                "description": "是否以唱歌的方式发送语音。默认为 false。设为 true 时，content 应填写纯歌词且不需要提供 style。",
+            },
         },
         category=ON_CHAT,
+        required=["content"],
     )
-    async def _(agent: CloversAgent, turn: Turn, event: Event, style: str, content: str):
+    async def _(
+        agent: CloversAgent,
+        turn: Turn,
+        event: Event,
+        content: str,
+        style: str = "",
+        sing: bool = False,
+    ):
+        api = turn.api
+        if sing:
+            content = f"(唱歌){content}"
+        elif style:
+            payload = api.build_payload(SEND_VOICE_PROMPT.format(style=style, content=content))
+            message = await api.call_api(payload, turn.usage_counter)
+            content = message["content"]
+
         payload = MIMO_TTS_API.build_payload()
         payload["messages"].append({"role": "user", "content": style})
         payload["messages"].append({"role": "assistant", "content": content})
-        message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
-        audio_data = cast(str, message["audio"]["data"])  # type: ignore
-        audio_bytes = base64.b64decode(audio_data)
-        if not audio_bytes:
-            return "语音生成失败：返回的音频为空。"
-        await event.send("voice", audio_bytes)
+
+        for voice in ("冰糖", "茉莉", "Mia", "Chloe"):
+            payload["audio"]["voice"] = voice
+            message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
+            audio_data = cast(str, message["audio"]["data"])  # type: ignore
+            audio_bytes = base64.b64decode(audio_data)
+            if not audio_bytes:
+                continue
+                return "语音生成失败：返回的音频为空。"
+            await event.send("voice", audio_bytes)
         return "OK"
 
 
