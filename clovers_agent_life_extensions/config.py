@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from clovers_client import Config as BaseConfig
+from clovers_agent.config import OpenAIConfig
 
 
 class UserProfileConfig(BaseModel):
@@ -24,6 +25,12 @@ class MemoryConfig(BaseModel):
 
 class ChatConfig(BaseModel):
     max_sticker_candidates: int = 32
+    mimo_tts: OpenAIConfig = OpenAIConfig(
+        url="https://api.xiaomimimo.com/v1",
+        model="mimo-v2.5-tts",
+        api_key="",
+        extra_body={"format": "wav", "voice": "mimo_default"},
+    )
 
 
 class Config(BaseConfig):

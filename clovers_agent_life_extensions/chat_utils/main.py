@@ -4,6 +4,7 @@ import uuid
 from pathlib import Path
 from clovers import Result
 from clovers_agent import CloversAgent, Turn, Event
+from clovers_agent.api import OpenAIAPI
 from clovers_agent.session import InputTag
 from clovers_agent.embedding import batch_similarity
 from clovers_agent.utils import load_jsonl, save_jsonl
@@ -100,6 +101,35 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, meaning: str):
     session = agent.current_session(turn.session_id)
     session.record_history(InputTag.ASSISTANT, f"发送了贴纸 [{desc}]", session.last_active_time)
     session.complete_session()
+
+
+if chat_config.mimo_tts.api_key:
+
+    @TOOLS.on_startup
+    async def _(agent: CloversAgent):
+        global MIMO_TTS_API
+        MIMO_TTS_API = OpenAIAPI(agent.async_client, chat_config.mimo_tts)
+
+    @TOOLS.register(
+        "send_voice_message",
+        "将文本转换为语音并发送给用户。根据指定的表达风格调整语气、情绪、语速和语调。",
+        {
+            "style": {"type": "string", "description": "语音的表达风格，描述这段话以什么样的情绪和状态说出来。"},
+            "content": {"type": "string", "description": "语音中实际要说出的完整文本。"},
+        },
+        category=ON_CHAT,
+    )
+    async def _(agent: CloversAgent, turn: Turn, event: Event, style: str, content: str):
+        payload = MIMO_TTS_API.build_payload()
+        payload["messages"].append({"role": "user", "content": style})
+        payload["messages"].append({"role": "assistant", "content": content})
+        message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
+        audio_data = cast(str, message["audio"]["data"])  # type: ignore
+        audio_bytes = base64.b64decode(audio_data, validate=True)
+        if not audio_bytes:
+            return "语音生成失败：返回的音频为空。"
+        await event.send("voice", audio_bytes)
+        return "OK"
 
 
 @TOOLS.register(
