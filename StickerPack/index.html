@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片与描述展示</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .uploader {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 600px;
+      margin: 0 auto 30px auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .uploader input {
+      margin: 10px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    .card img {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      background: #eee;
+    }
+    .card-content {
+      padding: 15px;
+      flex-grow: 1;
+    }
+    .card-title {
+      font-size: 12px;
+      color: #888;
+      word-break: break-all;
+      margin-bottom: 8px;
+    }
+    .card-desc {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>图片与描述展示</h1>
+
+  <div class="uploader">
+    <p>请选择当前目录下的所有文件（包含 <code>metadata.jsonl</code> 以及所有 <code>.b64</code> 文件）：</p>
+    <input type="file" id="fileInput" multiple>
+  </div>
+
+  <div id="grid" class="grid"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const grid = document.getElementById('grid');
+
+    fileInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      // 1. 查找 metadata.jsonl 文件
+      const metadataFile = files.find(f => f.name === 'metadata.jsonl');
+      if (!metadataFile) {
+        alert('未找到 metadata.jsonl 文件，请确保已一并选中！');
+        return;
+      }
+
+      // 2. 将所有文件映射为文件名 -> File 对象的字典
+      const fileMap = new Map();
+      files.forEach(f => fileMap.set(f.name, f));
+
+      // 3. 读取 metadata.jsonl 内容
+      const metadataText = await metadataFile.text();
+      const lines = metadataText.split('\n').map(l => l.trim()).filter(Boolean);
+
+      grid.innerHTML = ''; // 清空已有内容
+
+      // 4. 逐行解析并渲染
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line);
+          const [b64FileName, description] = item;
+
+          let imageSrc = '';
+          if (fileMap.has(b64FileName)) {
+            const b64File = fileMap.get(b64FileName);
+            imageSrc = (await b64File.text()).trim();
+          }
+
+          // 创建卡片节点
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <img src="${imageSrc}" alt="${b64FileName}" onerror="this.alt='图片加载失败'">
+            <div class="card-content">
+              <div class="card-title">${b64FileName}</div>
+              <div class="card-desc">${description}</div>
+            </div>
+          `;
+          grid.appendChild(card);
+        } catch (err) {
+          console.error('解析行失败:', line, err);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

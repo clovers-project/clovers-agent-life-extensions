@@ -9,3 +9,5 @@ wheels/
 # Virtual environments
 .venv
 config.toml
+batch_state.json
+*.b64

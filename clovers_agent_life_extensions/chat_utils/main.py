@@ -2,7 +2,7 @@ import heapq
 import json
 import base64
 import random
-import uuid
+import hashlib
 from pathlib import Path
 from clovers import Result
 from clovers_agent import CloversAgent, Turn, Event
@@ -32,7 +32,7 @@ STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
         },
         "description": {
             "type": "string",
-            "description": "结合使用场景，图片内容、画面中的文字、角色、表情、情绪和表达含义对图片进行简单描述。",
+            "description": "结合使用场景、画面中的文字、角色、表情、情绪和表达含义对图片进行一句话简单描述。",
         },
     },
     category=ON_CHAT,
@@ -40,7 +40,8 @@ STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
 async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, description: str):
     extra = turn.extra
     if KEY_STICKER_PACK not in extra:
-        stickers = extra[KEY_STICKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+        data = cast(list[list[str]], load_jsonl(STIKER_PACK_METADATA) or [])
+        stickers = extra[KEY_STICKER_PACK] = [(name, desc) for name, desc in data]
     else:
         stickers = cast(list[tuple[str, str]], extra[KEY_STICKER_PACK])
     message = next((x for x in reversed(turn.payload["messages"]) if x["role"] == "user"), None)
@@ -58,7 +59,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, des
     if name:
         file = STIKER_PACK / name
     else:
-        name = f"{uuid.uuid4()}.b64"
+        name = f"{hashlib.md5(data_url.encode()).hexdigest().upper()}.b64"
         file = STIKER_PACK / name
         sticker = (name, description)
         save_jsonl(STIKER_PACK_METADATA, sticker)
@@ -81,7 +82,8 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, des
 async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
     extra = turn.extra
     if KEY_STICKER_PACK not in extra:
-        stickers = extra[KEY_STICKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+        data = cast(list[list[str]], load_jsonl(STIKER_PACK_METADATA) or [])
+        stickers = extra[KEY_STICKER_PACK] = [(name, desc) for name, desc in data]
     else:
         stickers = cast(list[tuple[str, str]], extra[KEY_STICKER_PACK])
     if not stickers:

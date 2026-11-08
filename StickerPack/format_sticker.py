@@ -1,6 +1,6 @@
 if __name__ == "__main__":
-    import uuid
     import base64
+    import hashlib
     import puremagic
 
     from pathlib import Path
@@ -21,6 +21,6 @@ if __name__ == "__main__":
         b64url = to_b64url(image.read_bytes())
         if not b64url:
             continue
-        file = LOCAL_PATH / f"{uuid.uuid4()}.b64"
+        file = LOCAL_PATH / f"{hashlib.md5(b64url.encode()).hexdigest().upper()}.b64"
         file.write_text(b64url)
         image.unlink()
