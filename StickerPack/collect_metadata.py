@@ -31,7 +31,7 @@ def load_metadata():
 def save_metadata(metadata):
     temp_path = METADATA_PATH.with_suffix(".tmp")
     content = "\n".join(json.dumps(x, ensure_ascii=False) for x in metadata)
-    temp_path.write_text(content, encoding="utf-8")
+    temp_path.write_text(content + "\n", encoding="utf-8")
     temp_path.replace(METADATA_PATH)
 
 
