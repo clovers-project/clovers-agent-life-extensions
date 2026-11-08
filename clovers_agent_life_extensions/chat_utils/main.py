@@ -130,9 +130,10 @@ if chat_config.mimo_tts.api_key:
         payload["messages"].append({"role": "assistant", "content": content})
         message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
         audio_data = cast(str, message["audio"]["data"])  # type: ignore
-        if not audio_data:
+        audio_bytes = base64.b64decode(audio_data)
+        if not audio_bytes:
             return "语音生成失败：返回的音频为空。"
-        await event.send("voice", f"data:audio/wav;base64,{audio_data}")
+        await event.send("voice", audio_data)
         return "OK"
 
 
