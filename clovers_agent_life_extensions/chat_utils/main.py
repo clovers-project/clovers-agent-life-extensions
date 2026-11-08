@@ -127,7 +127,7 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
         "send_voice",
         "发送一条语音消息，可自定义语气、情绪和表达风格，也支持唱歌。",
         {
-            "content": {"type": "string", "description": "语音内容，用标准标点符号标记语气或停顿"},
+            "content": {"type": "string", "description": "语音内容"},
             "style": {"type": "string", "description": "描述这段话以什么样的表达风格说出来"},
             "sing": {
                 "type": "boolean",
