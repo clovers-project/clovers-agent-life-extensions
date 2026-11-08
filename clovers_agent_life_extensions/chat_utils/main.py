@@ -111,10 +111,10 @@ if chat_config.mimo_tts.api_key:
         MIMO_TTS_API = OpenAIAPI(agent.async_client, chat_config.mimo_tts)
 
     @TOOLS.register(
-        "send_voice_message",
-        "将文本转换为语音并发送给用户。根据指定的表达风格调整语气、情绪、语速和语调。",
+        "send_voice",
+        "发送一条语音消息",
         {
-            "style": {"type": "string", "description": "语音的表达风格，描述这段话以什么样的情绪和状态说出来。"},
+            "style": {"type": "string", "description": "语音语气、情绪、语速和语调等，描述这段话以什么样的表达风格说出来。"},
             "content": {"type": "string", "description": "语音中实际要说出的完整文本。"},
         },
         category=ON_CHAT,
