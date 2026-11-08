@@ -35,17 +35,18 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     else:
         user_profiles = extra[KEY_USER_PROFILES]
     if user_id in user_profiles:
-        return ""
-    user_profile_file = USER_PROFILE / f"{user_id}.json"
-    if not user_profile_file.exists():
-        return ""
-    try:
-        data = user_profile_file.read_text(encoding="utf-8")
-        user_profile = UserProfile.model_validate_json(data)
-    except Exception:
-        user_profile_file.unlink()
-        return ""
-    user_profiles[user_id] = user_profile
+        user_profile = user_profiles[user_id]
+    else:
+        user_profile_file = USER_PROFILE / f"{user_id}.json"
+        if not user_profile_file.exists():
+            return ""
+        try:
+            data = user_profile_file.read_text(encoding="utf-8")
+            user_profile = UserProfile.model_validate_json(data)
+        except Exception:
+            user_profile_file.unlink()
+            return ""
+        user_profiles[user_id] = user_profile
     if user_profile.block_until > time.time():
         agent.current_session(turn.session_id).complete_session()
     return ""
