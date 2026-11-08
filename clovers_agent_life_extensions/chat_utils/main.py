@@ -1,5 +1,7 @@
 import heapq
+import json
 import base64
+import random
 import uuid
 from pathlib import Path
 from clovers import Result
@@ -10,7 +12,7 @@ from clovers_agent.embedding import batch_similarity
 from clovers_agent.utils import load_jsonl, save_jsonl
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
-from .constants import KEY_STIKER_PACK
+from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT
 from ..base import TOOLS, CONFIG
 from typing import cast
 
@@ -30,17 +32,17 @@ STIKER_PACK_METADATA = Path(STIKER_PACK) / "metadata.jsonl"
         },
         "description": {
             "type": "string",
-            "description": "为贴纸起一个简短且具有辨识度的描述性名称。结合图片内容、画面中的文字、角色、表情、情绪和表达含义进行描述。",
+            "description": "结合使用场景，图片内容、画面中的文字、角色、表情、情绪和表达含义对图片进行简单描述。",
         },
     },
     category=ON_CHAT,
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, description: str):
     extra = turn.extra
-    if KEY_STIKER_PACK not in extra:
-        stickers = extra[KEY_STIKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+    if KEY_STICKER_PACK not in extra:
+        stickers = extra[KEY_STICKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
     else:
-        stickers = cast(list[tuple[str, str]], extra[KEY_STIKER_PACK])
+        stickers = cast(list[tuple[str, str]], extra[KEY_STICKER_PACK])
     message = next((x for x in reversed(turn.payload["messages"]) if x["role"] == "user"), None)
     if not message or not (isinstance(content := message["content"], list)):
         return "未从当前用户信息中找到图片。"
@@ -67,34 +69,34 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, des
 
 @TOOLS.register(
     "send_sticker",
-    "发送一张贴纸，发送后立即结束当前对话",
-    {"meaning": {"type": "string", "description": "希望通过贴纸表达的情绪、态度或含义"}},
+    "发送一张贴纸回应当前对话。发送后立即结束当前对话。",
+    {
+        "intent": {
+            "type": "string",
+            "description": "描述你对贴纸内容、情绪氛围或表达效果的期待，例如希望贴纸呈现的画面、传递的情绪或表达的态度。",
+        }
+    },
     category=ON_CHAT,
 )
-async def _(agent: CloversAgent, turn: Turn, event: Event, meaning: str):
+async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
     extra = turn.extra
-    if KEY_STIKER_PACK not in extra:
-        stickers = extra[KEY_STIKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
+    if KEY_STICKER_PACK not in extra:
+        stickers = extra[KEY_STICKER_PACK] = cast(list[tuple[str, str]], load_jsonl(STIKER_PACK_METADATA))
     else:
-        stickers = cast(list[tuple[str, str]], extra[KEY_STIKER_PACK])
+        stickers = cast(list[tuple[str, str]], extra[KEY_STICKER_PACK])
     if not stickers:
         return "没有可用的贴纸。"
     turn.create_turn()
-    prompts = [
-        "请根据给定的表达意图，从以下贴纸中选择选择语义和情绪最匹配的一张。",
-        "只输出选中贴纸的序号，不输出任何其他内容。",
-        "候选贴纸：",
-    ]
     if len(stickers) > MAX_STICKER_CANDIDATES:
-        similarities = batch_similarity([x for _, x in stickers], meaning, agent.sentence_model)
+        similarities = batch_similarity([x for _, x in stickers], intent, agent.sentence_model)
         lst = heapq.nlargest(MAX_STICKER_CANDIDATES, zip(similarities, stickers), key=lambda x: x[0])
         stickers = [sticker for _, sticker in lst]
-    for i, desc in enumerate(stickers, start=1):
-        prompts.append(f"{i}. {desc}")
-    prompts.append(f"表达意图：{meaning}")
-    prompts.append("选出的贴纸序号：")
-    turn.create_payload(agent.api("router"), "\n".join(prompts))
-    sticker_id = int((await turn.call_api())["content"]) - 1
+    prompt = SEND_STICKER_PROMPT.format("\n".join(f"{i}. {desc}" for i, desc in enumerate(stickers, start=1)))
+    turn.create_payload(agent.api("router"), prompt)
+    turn.input_text(intent)
+    turn.payload["response_format"] = {"type": "json_object"}
+    message = await turn.call_api()
+    sticker_id = cast(int, random.choice(json.loads(message["content"])))
     name, desc = stickers[sticker_id]
     file = STIKER_PACK / name
     await event.send("image", file.read_text())
