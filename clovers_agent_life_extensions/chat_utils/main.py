@@ -6,6 +6,7 @@ import hashlib
 import asyncio
 from pathlib import Path
 from clovers import Result
+from clovers.logger import logger
 from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.api import OpenAIAPI
 from clovers_agent.session import InputTag
@@ -13,7 +14,7 @@ from clovers_agent.embedding import batch_similarity
 from clovers_agent.utils import load_jsonl, save_jsonl, to_b64url
 from clovers_agent.config import CONFIG as AGENT_CONFIG
 from clovers_agent.constants import ON_CHAT
-from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT, SEND_VOICE_PROMPT
+from .constants import KEY_STICKER_PACK, SEND_STICKER_PROMPT
 from ..base import TOOLS, CONFIG
 from typing import cast
 
@@ -109,7 +110,7 @@ async def _(
     payload["messages"].append({"role": "user", "content": intent})
     payload["response_format"] = {"type": "json_object"}
     message = await api.call_api(payload, turn.usage_counter)
-    sticker_id = cast(int, random.choice(json.loads(message["content"])))
+    sticker_id = cast(int, random.choice(json.loads(message["content"])["indices"]))
     name, desc = stickers[sticker_id]
     file = STIKER_PACK / name
     await event.send("image", file.read_text())
