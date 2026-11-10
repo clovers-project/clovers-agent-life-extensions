@@ -78,11 +78,19 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, image_index: int, des
         "intent": {
             "type": "string",
             "description": "描述你对贴纸内容、情绪氛围或表达效果的期待，例如希望贴纸呈现的画面、传递的情绪或表达的态度。",
-        }
+        },
+        "stop_after_send": {"type": "boolean"},
     },
     category=ON_CHAT,
+    required=["intent"],
 )
-async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
+async def _(
+    agent: CloversAgent,
+    turn: Turn,
+    event: Event,
+    intent: str,
+    stop_after_send: bool = True,
+):
     extra = turn.extra
     if KEY_STICKER_PACK not in extra:
         data = cast(list[list[str]], load_jsonl(STIKER_PACK_METADATA) or [])
@@ -107,7 +115,9 @@ async def _(agent: CloversAgent, turn: Turn, event: Event, intent: str):
     await event.send("image", file.read_text())
     session = agent.current_session(turn.session_id)
     session.record_history(InputTag.ASSISTANT, f"发送了贴纸 [{desc}]", session.last_active_time)
-    session.complete_session()
+    if stop_after_send:
+        session.complete_session()
+    return "OK"
 
 
 ref_voice = next((x for x in CHAT_UTILS_PATH.iterdir() if x.stem == "ref_voice"), None)
@@ -125,7 +135,7 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
 
     @TOOLS.register(
         "send_voice",
-        "发送一条语音消息，可自定义语气、情绪和表达风格，也支持唱歌。",
+        "发送一条语音消息，可自定义语气、情绪和表达风格，也支持唱歌。发送后立即结束当前对话。",
         {
             "content": {"type": "string", "description": "语音内容"},
             "style": {"type": "string", "description": "描述这段话以什么样的表达风格说出来"},
@@ -133,6 +143,7 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
                 "type": "boolean",
                 "description": "是否以唱歌的方式发送语音。默认为 false。设为 true 时，content 应填写纯歌词且不需要提供 style",
             },
+            "stop_after_send": {"type": "boolean"},
         },
         category=ON_CHAT,
         required=["content"],
@@ -144,17 +155,18 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
         content: str,
         style: str = "",
         sing: bool = False,
+        stop_after_send: bool = True,
     ):
+        payload = MIMO_TTS_API.build_payload()
         if sing:
             content = f"(唱歌){content}"
         elif style:
-            api = agent.api("voice_style")
-            payload = api.build_payload(SEND_VOICE_PROMPT)
-            payload["messages"].append({"role": "user", "content": f"风格要求：{style}\n语音文本：{content}"})
-            message = await api.call_api(payload, turn.usage_counter)
-            content = message["content"]
-        payload = MIMO_TTS_API.build_payload()
-        payload["messages"].append({"role": "user", "content": style})
+            payload["messages"].append({"role": "user", "content": style})
+            # api = agent.api("voice_style")
+            # style_payload = api.build_payload(SEND_VOICE_PROMPT)
+            # style_payload["messages"].append({"role": "user", "content": f"风格要求：{style}\n语音文本：{content}"})
+            # message = await api.call_api(style_payload, turn.usage_counter)
+            # content = message["content"]
         payload["messages"].append({"role": "assistant", "content": content})
         payload["audio"]["voice"] = REF_VOICE
         message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
@@ -163,6 +175,10 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
         if not audio_bytes:
             return "语音生成失败：返回的音频为空。"
         await event.send("voice", audio_bytes)
+        session = agent.current_session(turn.session_id)
+        session.record_history(InputTag.ASSISTANT, f"发送了语音消息 [{content}]", session.last_active_time)
+        if stop_after_send:
+            session.complete_session()
         return "OK"
 
 

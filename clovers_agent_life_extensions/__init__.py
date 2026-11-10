@@ -5,7 +5,15 @@ from .user_profile import intro_user_profile
 from .memory import intro_retrieve_history
 from . import chat_utils as chat_utils
 
-STICKER_PROMPT = CONFIG.chat.sticker_prompt
+LIFE_PROMPT = f"""
+
+{CONFIG.chat.chat_utils_prompt}
+"""
+
+
+@TOOLS.on_startup
+async def _(agent: CloversAgent):
+    agent.chat_prompt = agent.chat_prompt + LIFE_PROMPT
 
 
 @TOOLS.on_intro(ON_CHAT)
@@ -14,7 +22,6 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     units = [
         await intro_retrieve_history(agent, session),
         intro_user_profile(session, event),
-        STICKER_PROMPT,
     ]
     return "\n---\n".join(filter(None, units))
 
