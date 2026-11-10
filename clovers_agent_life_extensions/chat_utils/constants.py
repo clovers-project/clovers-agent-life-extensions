@@ -17,9 +17,9 @@ SEND_STICKER_PROMPT = """\
 indices 必须是一个 array[integer]
 
 EXAMPLE JSON OUTPUT:
-{
+{{
     "indices": [3, 5, 8]
-}
+}}
 """
 
 
