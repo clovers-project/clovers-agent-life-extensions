@@ -121,6 +121,7 @@ async def _(
     return "OK"
 
 
+CHAT_UTILS_PATH.mkdir(parents=True, exist_ok=True)
 ref_voice = next((x for x in CHAT_UTILS_PATH.iterdir() if x.stem == "ref_voice"), None)
 if ref_voice:
     REF_VOICE = to_b64url(ref_voice.read_bytes(), ("mpeg", "mp3", "wav"))
