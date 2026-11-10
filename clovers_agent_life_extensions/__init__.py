@@ -21,7 +21,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     session = agent.current_session(turn.session_id)
     units = [
         await intro_retrieve_history(agent, session),
-        intro_user_profile(session, event),
+        intro_user_profile(agent, session, event),
     ]
     return "\n---\n".join(filter(None, units))
 
