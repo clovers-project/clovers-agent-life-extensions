@@ -28,7 +28,7 @@ USER_PROFILE = Path(AGENT_CONFIG.path) / "UserProfile"
 
 @TOOLS.on_intro(ROUTER_INTRO)
 async def _(agent: CloversAgent, turn: Turn, event: Event):
-    extra = turn.extra
+    extra = agent.extra
     user_id = event.user_id
     if KEY_USER_PROFILES not in extra:
         user_profiles = extra[KEY_USER_PROFILES] = {}
@@ -52,12 +52,12 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     return ""
 
 
-def intro_user_profile(session: Session, event: Event) -> str:
-    extra = session.extra
+def intro_user_profile(agent: CloversAgent, session: Session, event: Event) -> str:
     user_id = event.user_id
-    user_profile = cast(dict[str, UserProfile], extra[KEY_USER_PROFILES]).get(event.user_id)
+    user_profile = cast(dict[str, UserProfile], agent.extra[KEY_USER_PROFILES]).get(event.user_id)
     if user_profile is None:
         return f"# 用户档案：{event.nickname}\n\n目前尚无该用户档案，请在**上下文足够充分**时进行使用 '{UPDATE_USER_PROFILE}' 工具进行第一次更新。"
+    extra = session.extra
     if KEY_PROFILE_UPDATE_TURNS not in extra:
         counter = extra[KEY_PROFILE_UPDATE_TURNS] = {}
     else:
@@ -81,7 +81,7 @@ def intro_user_profile(session: Session, event: Event) -> str:
 )
 async def _(agent: CloversAgent, turn: Turn, event: Event, block_days: int = 7):
     user_id = event.user_id
-    user_profiles = cast(dict[str, UserProfile], turn.extra[KEY_USER_PROFILES])
+    user_profiles = cast(dict[str, UserProfile], agent.extra[KEY_USER_PROFILES])
     user_profile = user_profiles.get(event.user_id)
     block_t = min(max(block_days, 1), 30) * 86400 + time.time()
     if user_profile is None:
@@ -134,7 +134,7 @@ async def _(
     demote_memory_ids: list[int] | None = None,
 ):
     user_id = event.user_id
-    user_profiles = cast(dict[str, UserProfile], turn.extra[KEY_USER_PROFILES])
+    user_profiles = cast(dict[str, UserProfile], agent.extra[KEY_USER_PROFILES])
     user_profile = user_profiles.get(event.user_id)
     if user_profile is None:
         user_profile = user_profiles[user_id] = UserProfile()

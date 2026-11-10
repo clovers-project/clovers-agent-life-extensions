@@ -29,7 +29,6 @@ class ChatConfig(BaseModel):
         url="https://api.xiaomimimo.com/v1",
         model="mimo-v2.5-tts-voiceclone",
         api_key="",
-        extra_body={"audio": {"format": "wav"}},
     )
     chat_utils_prompt: str = """\
 部分发送工具提供的 stop_after_send 参数介绍：

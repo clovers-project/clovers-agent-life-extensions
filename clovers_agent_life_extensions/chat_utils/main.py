@@ -111,7 +111,7 @@ async def _(
     payload["response_format"] = {"type": "json_object"}
     message = await api.call_api(payload, turn.usage_counter)
     sticker_id = cast(int, random.choice(json.loads(message["content"])["indices"]))
-    name, desc = stickers[sticker_id]
+    name, desc = stickers[sticker_id - 1]
     file = STIKER_PACK / name
     await event.send("image", file.read_text())
     session = agent.current_session(turn.session_id)
@@ -170,7 +170,7 @@ if REF_VOICE and chat_config.mimo_tts.api_key:
             # message = await api.call_api(style_payload, turn.usage_counter)
             # content = message["content"]
         payload["messages"].append({"role": "assistant", "content": content})
-        payload["audio"]["voice"] = REF_VOICE
+        payload["audio"] = {"format": "wav", "voice": REF_VOICE}
         message = await MIMO_TTS_API.call_api(payload, turn.usage_counter)
         audio_data = cast(str, message["audio"]["data"])  # type: ignore
         audio_bytes = base64.b64decode(audio_data)
