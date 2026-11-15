@@ -14,8 +14,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event) -> str:
 image_utils 部分参数说明
 
 prompt: 生图提示词。留空时使用用户当前消息。
-inspect_result: 是否将结果图附加给助手继续查看，默认 false。
-"""
+inspect_result: 是否将结果图附加给助手继续查看，默认 false。"""
 
 
 @TOOLS.register(
