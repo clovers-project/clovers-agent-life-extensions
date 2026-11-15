@@ -28,7 +28,7 @@ inspect_result: 是否将结果图附加给助手继续查看，默认 false。
         },
         "size": {
             "type": "string",
-            "description": "输出尺寸，默认 auto 或传入 WIDTHxHEIGHT。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
+            "description": "输出尺寸（WIDTHxHEIGHT），默认 1920x1080。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
         },
         "quality": {
             "type": "string",
