@@ -43,7 +43,7 @@ async def _(
     turn: Turn,
     event: Event,
     prompt: str = "",
-    size: str = "auto",
+    size: str = "1920x1080",
     quality: str = "auto",
     inspect_result: bool = False,
 ) -> str:
