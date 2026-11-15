@@ -1,0 +1,2 @@
+IMAGE_UTILS = "image_utils"
+IMAGE_TIMEOUT = 600.0

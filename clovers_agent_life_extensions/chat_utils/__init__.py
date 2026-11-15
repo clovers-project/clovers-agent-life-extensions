@@ -1,1 +1,4 @@
-from . import main as _
+from ..base import CONFIG
+
+if CONFIG.image.api_key:
+    from . import main as _

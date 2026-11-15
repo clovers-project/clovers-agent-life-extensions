@@ -45,7 +45,14 @@ class ChatConfig(BaseModel):
 """
 
 
+class GPTImageConfig(BaseModel):
+    url: str = "https://api.openai.com/v1"
+    model: str = "gpt-image-2.6-sunburst"
+    api_key: str = ""
+
+
 class Config(BaseConfig):
     user_profile: UserProfileConfig = UserProfileConfig()
     histories: MemoryConfig = MemoryConfig()
     chat: ChatConfig = ChatConfig()
+    image: GPTImageConfig = GPTImageConfig()

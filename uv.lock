@@ -127,7 +127,6 @@ wheels = [
 
 [[package]]
 name = "clovers-agent"
-version = "0.3.2"
 source = { editable = "D:/CLOVERS/clovers-agent/clovers-agent" }
 dependencies = [
     { name = "chardet" },
@@ -164,7 +163,6 @@ requires-dist = [
 
 [[package]]
 name = "clovers-agent-life-extensions"
-version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "clovers-agent" },

@@ -6,7 +6,6 @@ import hashlib
 import asyncio
 from pathlib import Path
 from clovers import Result
-from clovers.logger import logger
 from clovers_agent import CloversAgent, Turn, Event
 from clovers_agent.api import OpenAIAPI
 from clovers_agent.session import InputTag

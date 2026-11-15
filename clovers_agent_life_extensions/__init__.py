@@ -4,6 +4,7 @@ from .base import TOOLS, CONFIG
 from .user_profile import intro_user_profile
 from .memory import intro_retrieve_history
 from . import chat_utils as chat_utils
+from . import image_utils as image_utils
 
 LIFE_PROMPT = f"""
 
@@ -26,5 +27,5 @@ async def _(agent: CloversAgent, turn: Turn, event: Event):
     return "\n---\n".join(filter(None, units))
 
 
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 __all__ = ["TOOLS"]
