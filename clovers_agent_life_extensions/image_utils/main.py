@@ -27,11 +27,16 @@ inspect_result: 是否将结果图附加给助手继续查看，默认 false。"
         },
         "size": {
             "type": "string",
-            "description": "输出尺寸（WIDTHxHEIGHT），默认 1920x1080。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
+            "description": "输出尺寸（WIDTHxHEIGHT），默认为 1920x1080。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
         },
         "quality": {
             "type": "string",
             "enum": ["auto", "low", "medium", "high", "xhigh", "max"],
+        },
+        "output_format": {
+            "type": "string",
+            "enum": ["png", "jpg", "jpeg", "webp", "gif"],
+            "description": "输出图像的格式，默认为 png。",
         },
         "inspect_result": {"type": "boolean"},
     },
@@ -45,6 +50,7 @@ async def _(
     prompt: str = "",
     size: str = "1920x1080",
     quality: str = "auto",
+    output_format: str = "png",
     inspect_result: bool = False,
 ) -> str:
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
@@ -53,7 +59,7 @@ async def _(
         "prompt": prompt or event.message,
         "size": size,
         "quality": quality,
-        "output_format": "png",
+        "output_format": output_format,
     }
     url = f"{URL}/images/generations"
     response = await agent.async_client.post(url, headers=headers, json=payload, timeout=IMAGE_TIMEOUT)
