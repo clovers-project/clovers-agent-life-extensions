@@ -14,7 +14,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event) -> str:
 image_utils 部分参数说明
 
 prompt: 生图提示词。留空时使用用户当前消息。此参数为视觉提示词，不在此参数中约束其他格式。
-size: 输出尺寸（WIDTHxHEIGHT），默认为 1536x864。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。
+size: 输出尺寸（WIDTHxHEIGHT）。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间，如 1536x864。默认为 auto。
 quality: 图像质量，默认 auto。
 output_format: 输出图像的格式，默认 png。
 inspect_result: 是否将结果图附加给助手继续查看，默认 false。"""
@@ -38,7 +38,7 @@ async def _(
     turn: Turn,
     event: Event,
     prompt: str = "",
-    size: str = "1536x864",
+    size: str = "auto",
     quality: str = "auto",
     output_format: str = "png",
     inspect_result: bool = False,
@@ -81,7 +81,7 @@ async def _(
     turn: Turn,
     event: Event,
     prompt: str = "",
-    size: str = "1536x864",
+    size: str = "auto",
     quality: str = "auto",
     output_format: str = "png",
     inspect_result: bool = False,
