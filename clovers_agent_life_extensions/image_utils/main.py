@@ -13,7 +13,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event) -> str:
     return """\
 image_utils 部分参数说明
 
-prompt: 生图提示词。留空时使用用户当前消息。
+prompt: 生图提示词。留空时使用用户当前消息。此参数为视觉提示词，不在此参数中约束其他格式。
 inspect_result: 是否将结果图附加给助手继续查看，默认 false。"""
 
 
@@ -23,11 +23,11 @@ inspect_result: 是否将结果图附加给助手继续查看，默认 false。"
     {
         "prompt": {
             "type": "string",
-            "description": "要生成图像的内容、主体、场景与风格",
+            "description": "要生成图像的内容、主体、场景与风格。",
         },
         "size": {
             "type": "string",
-            "description": "输出尺寸（WIDTHxHEIGHT），默认为 1920x1080。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
+            "description": "输出尺寸（WIDTHxHEIGHT），默认为 1536x864。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间。",
         },
         "quality": {
             "type": "string",
@@ -35,7 +35,7 @@ inspect_result: 是否将结果图附加给助手继续查看，默认 false。"
         },
         "output_format": {
             "type": "string",
-            "enum": ["png", "jpg", "jpeg", "webp", "gif"],
+            "enum": ["png", "jpeg", "webp", "svg", "gif"],
             "description": "输出图像的格式，默认为 png。",
         },
         "inspect_result": {"type": "boolean"},
@@ -48,7 +48,7 @@ async def _(
     turn: Turn,
     event: Event,
     prompt: str = "",
-    size: str = "1920x1080",
+    size: str = "1536x864",
     quality: str = "auto",
     output_format: str = "png",
     inspect_result: bool = False,
