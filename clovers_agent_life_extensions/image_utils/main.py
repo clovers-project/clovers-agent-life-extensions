@@ -15,7 +15,7 @@ async def _(agent: CloversAgent, turn: Turn, event: Event) -> str:
     return """\
 image_utils 部分参数说明
 
-prompt: 生图提示词，如要生成图像的内容、主体、场景与风格等。留空时使用用户当前消息。此参数为视觉提示词，不应在此参数中约束其他格式。
+prompt: 图片的自然语言提示词，如要生成图像的内容、主体、场景与风格等。留空时使用用户当前消息。此参数为视觉提示词，不应在此参数中约束其他格式。
 size: 输出尺寸（WIDTHxHEIGHT）。宽高须为 16 的倍数，长宽比须在 1:3 到 3:1 之间，如 1536x864。默认为 auto。
 quality: 图像质量，默认 auto。
 output_format: 输出图像的格式，默认 png。
