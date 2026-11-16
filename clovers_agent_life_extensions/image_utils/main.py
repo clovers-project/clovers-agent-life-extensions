@@ -2,6 +2,8 @@ from clovers_agent import CloversAgent, Turn, Event
 from ..base import TOOLS, CONFIG
 from .constants import IMAGE_UTILS, IMAGE_TIMEOUT
 
+from typing import cast
+
 image_config = CONFIG.image
 URL = image_config.url.rstrip("/")
 API_KEY = image_config.api_key
@@ -53,10 +55,15 @@ async def _(
     }
     url = f"{URL}/images/generations"
     response = await agent.async_client.post(url, headers=headers, json=payload, timeout=IMAGE_TIMEOUT)
-    result = response.json()["data"][0]
-    mime_type = result["mime_type"]
-    b64 = result["b64_json"]
-    image = f"data:{mime_type};base64,{b64}"
+    result = cast(dict[str, str], response.json()["data"][0])
+    if "b64_json" in result:
+        mime_type = result.get("mime_type") or f"image/{output_format}"
+        b64 = result["b64_json"]
+        image = f"data:{mime_type};base64,{b64}"
+    elif "url" in result and (b64url := await turn.api.download_url(result["url"], ())):
+        image = b64url
+    else:
+        return "接口返回结果错误"
     await event.send("image", image)
     if inspect_result:
         turn.pending_content.append({"type": "image_url", "image_url": {"url": image}})
@@ -101,10 +108,15 @@ async def _(
     }
     url = f"{URL}/images/edits"
     response = await agent.async_client.post(url, headers=headers, json=payload, timeout=IMAGE_TIMEOUT)
-    result = response.json()["data"][0]
-    mime_type = result["mime_type"]
-    b64 = result["b64_json"]
-    image = f"data:{mime_type};base64,{b64}"
+    result = cast(dict[str, str], response.json()["data"][0])
+    if "b64_json" in result:
+        mime_type = result.get("mime_type") or f"image/{output_format}"
+        b64 = result["b64_json"]
+        image = f"data:{mime_type};base64,{b64}"
+    elif "url" in result and (b64url := await turn.api.download_url(result["url"], ())):
+        image = b64url
+    else:
+        return "接口返回结果错误"
     await event.send("image", image)
     if inspect_result:
         turn.pending_content.append({"type": "image_url", "image_url": {"url": image}})
